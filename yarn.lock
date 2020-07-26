@@ -3457,10 +3457,10 @@ degenerator@^1.0.4:
     escodegen "1.x.x"
     esprima "3.x.x"
 
-delay@4.3.0:
-  version "4.3.0"
-  resolved "https://registry.yarnpkg.com/delay/-/delay-4.3.0.tgz#efeebfb8f545579cb396b3a722443ec96d14c50e"
-  integrity sha512-Lwaf3zVFDMBop1yDuFZ19F9WyGcZcGacsbdlZtWjQmM50tOcMntm1njF/Nb/Vjij3KaSvCF+sEYGKrrjObu2NA==
+delay@4.4.0:
+  version "4.4.0"
+  resolved "https://registry.yarnpkg.com/delay/-/delay-4.4.0.tgz#71abc745f3ce043fe7f450491236541edec4ad0c"
+  integrity sha512-txgOrJu3OdtOfTiEOT2e76dJVfG/1dz2NZ4F0Pyt4UGZJryssMRp5vdM5wQoLwSOBNdrJv3F9PAhp/heqd7vrA==
 
 delayed-stream@~1.0.0:
   version "1.0.0"
@@ -9077,9 +9077,9 @@ tap-mocha-reporter@^3.0.9, tap-mocha-reporter@^5.0.1:
     unicode-length "^2.0.2"
 
 tap-parser@^10.0.0:
-  version "10.0.1"
-  resolved "https://registry.yarnpkg.com/tap-parser/-/tap-parser-10.0.1.tgz#b63c2500eeef2be8fbf09d512914196d1f12ebec"
-  integrity sha512-qdT15H0DoJIi7zOqVXDn9X0gSM68JjNy1w3VemwTJlDnETjbi6SutnqmBfjDJAwkFS79NJ97gZKqie00ZCGmzg==
+  version "10.1.0"
+  resolved "https://registry.yarnpkg.com/tap-parser/-/tap-parser-10.1.0.tgz#7b1aac40dbcaa4716c0b58952686eae65d2b74ad"
+  integrity sha512-FujQeciDaOiOvaIVGS1Rpb0v4R6XkOjvWCWowlz5oKuhPkEJ8U6pxgqt38xuzYhPt8dWEnfHn2jqpZdJEkW7pA==
   dependencies:
     events-to-array "^1.0.1"
     minipass "^3.0.0"
