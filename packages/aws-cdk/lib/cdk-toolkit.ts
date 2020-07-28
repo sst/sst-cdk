@@ -285,6 +285,137 @@ export class CdkToolkit {
     return 0; // exit-code
   }
 
+  public async deployDependencyTree() {
+    const stacks = await this.selectStacksForList([]);
+
+    for (const stack of stacks.stackArtifacts) {
+      data(JSON.stringify({
+        stack: stack.id,
+        dependencies: stack.dependencies.map(d => d.id),
+      }));
+    }
+
+    return 0; // exit-code
+  }
+
+  public async deployAsync(options: DeployOptions) {
+    const stacks = await this.selectSingleStackByName(options.stackNames[0]);
+    const stack = stacks.firstStack;
+
+    const parameterMap: { [name: string]: { [name: string]: string | undefined } } = {'*': {}};
+    const stackOutputs: { [key: string]: any } = { };
+    const tags = options.tags;
+
+    if (Object.keys(stack.template.Resources || {}).length === 0) { // The generated stack has no resources
+      if (!await this.props.cloudFormation.stackExists({ stack }))  {
+        warning('%s: stack has no resources, skipping deployment.', colors.bold(stack.displayName));
+      } else {
+        warning('%s: stack has no resources, deleting existing stack.', colors.bold(stack.displayName));
+        await this.destroy({
+          stackNames: [stack.stackName],
+          exclusively: true,
+          force: true,
+          roleArn: options.roleArn,
+          fromDeploy: true,
+        });
+      }
+      print(JSON.stringify({ status: 'skipped' }));
+    }
+
+    print('%s: deploying...', colors.bold(stack.displayName));
+
+    try {
+      const result = await this.props.cloudFormation.deployStackAsync({
+        stack,
+        deployName: stack.stackName,
+        roleArn: options.roleArn,
+        toolkitStackName: options.toolkitStackName,
+        reuseAssets: options.reuseAssets,
+        notificationArns: options.notificationArns,
+        tags,
+        execute: options.execute,
+        force: options.force,
+        parameters: Object.assign({}, parameterMap['*'], parameterMap[stack.stackName]),
+        usePreviousParameters: options.usePreviousParameters,
+      });
+
+      const message = result.noOp
+        ? ' ✅  %s (no changes)'
+        : ' ⏳  %s';
+
+      success('\n' + message, stack.displayName);
+
+      if (Object.keys(result.outputs).length > 0) {
+        print('\nOutputs:');
+
+        stackOutputs[stack.stackName] = result.outputs;
+      }
+
+      for (const name of Object.keys(result.outputs)) {
+        const value = result.outputs[name];
+        print('%s.%s = %s', colors.cyan(stack.id), colors.cyan(name), colors.underline(colors.cyan(value)));
+      }
+
+      print('\nStack ARN:');
+
+      data(result.stackArn);
+    } catch (e) {
+      error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
+      throw e;
+    }
+  }
+
+  public async deployStatus(options: DeployOptions) {
+    const stacks = await this.selectSingleStackByName(options.stackNames[0]);
+    const stack = stacks.firstStack;
+
+    const parameterMap: { [name: string]: { [name: string]: string | undefined } } = {'*': {}};
+    const stackOutputs: { [key: string]: any } = { };
+    const tags = options.tags;
+
+    print('%s: deploying...', colors.bold(stack.displayName));
+
+    try {
+      const result = await this.props.cloudFormation.deployStatus({
+        stack,
+        deployName: stack.stackName,
+        roleArn: options.roleArn,
+        toolkitStackName: options.toolkitStackName,
+        reuseAssets: options.reuseAssets,
+        notificationArns: options.notificationArns,
+        tags,
+        execute: options.execute,
+        force: options.force,
+        parameters: Object.assign({}, parameterMap['*'], parameterMap[stack.stackName]),
+        usePreviousParameters: options.usePreviousParameters,
+      });
+
+      const message = result.noOp
+        ? ' ⏳  %s'
+        : ' ✅  %s';
+
+      success('\n' + message, stack.displayName);
+
+      if (Object.keys(result.outputs).length > 0) {
+        print('\nOutputs:');
+
+        stackOutputs[stack.stackName] = result.outputs;
+      }
+
+      for (const name of Object.keys(result.outputs)) {
+        const value = result.outputs[name];
+        print('%s.%s = %s', colors.cyan(stack.id), colors.cyan(name), colors.underline(colors.cyan(value)));
+      }
+
+      print('\nStack ARN:');
+
+      data(result.stackArn);
+    } catch (e) {
+      error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
+      throw e;
+    }
+  }
+
   /**
    * Synthesize the given set of stacks (called when the user runs 'cdk synth')
    *

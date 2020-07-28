@@ -4,7 +4,7 @@ import { Tag } from '../cdk-toolkit';
 import { debug } from '../logging';
 import { publishAssets } from '../util/asset-publishing';
 import { Mode, SdkProvider } from './aws-auth';
-import { deployStack, DeployStackResult, destroyStack } from './deploy-stack';
+import { deployStack, deployStackAsync, deployStatus, DeployStackResult, destroyStack } from './deploy-stack';
 import { ToolkitInfo } from './toolkit-info';
 import { CloudFormationStack, Template } from './util/cloudformation';
 
@@ -141,6 +141,60 @@ export class CloudFormationDeployments {
     this.validateBootstrapStackVersion(options.stack.stackName, options.stack.requiresBootstrapStackVersion, toolkitInfo);
 
     return deployStack({
+      stack: options.stack,
+      resolvedEnvironment,
+      deployName: options.deployName,
+      notificationArns: options.notificationArns,
+      quiet: options.quiet,
+      sdk: stackSdk,
+      sdkProvider: this.sdkProvider,
+      roleArn: cloudFormationRoleArn,
+      reuseAssets: options.reuseAssets,
+      toolkitInfo,
+      tags: options.tags,
+      execute: options.execute,
+      force: options.force,
+      parameters: options.parameters,
+      usePreviousParameters: options.usePreviousParameters,
+    });
+  }
+
+  public async deployStackAsync(options: DeployStackOptions): Promise<DeployStackResult> {
+    const { stackSdk, resolvedEnvironment, cloudFormationRoleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
+
+    const toolkitInfo = await ToolkitInfo.lookup(resolvedEnvironment, stackSdk, options.toolkitStackName);
+
+    // Publish any assets before doing the actual deploy
+    await this.publishStackAssets(options.stack, toolkitInfo);
+
+    // Do a verification of the bootstrap stack version
+    this.validateBootstrapStackVersion(options.stack.stackName, options.stack.requiresBootstrapStackVersion, toolkitInfo);
+
+    return deployStackAsync({
+      stack: options.stack,
+      resolvedEnvironment,
+      deployName: options.deployName,
+      notificationArns: options.notificationArns,
+      quiet: options.quiet,
+      sdk: stackSdk,
+      sdkProvider: this.sdkProvider,
+      roleArn: cloudFormationRoleArn,
+      reuseAssets: options.reuseAssets,
+      toolkitInfo,
+      tags: options.tags,
+      execute: options.execute,
+      force: options.force,
+      parameters: options.parameters,
+      usePreviousParameters: options.usePreviousParameters,
+    });
+  }
+
+  public async deployStatus(options: DeployStackOptions): Promise<DeployStackResult> {
+    const { stackSdk, resolvedEnvironment, cloudFormationRoleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
+
+    const toolkitInfo = await ToolkitInfo.lookup(resolvedEnvironment, stackSdk, options.toolkitStackName);
+
+    return deployStatus({
       stack: options.stack,
       resolvedEnvironment,
       deployName: options.deployName,

@@ -106,6 +106,11 @@ async function parseCommandLineArguments() {
       .option('list', { type: 'boolean', desc: 'List the available templates' })
       .option('generate-only', { type: 'boolean', default: false, desc: 'If true, only generates project files, without executing additional operations such as setting up a git repo, installing dependencies or compiling the project'}),
     )
+    .command('deploy-dependency-tree', 'Returns deploy dependency tree')
+    .command('deploy-async [STACK]', 'Returns deploy dependency tree', yargs => yargs
+      .option('force', { alias: 'f', type: 'boolean', desc: 'Always deploy stack even if templates are identical', default: false }),
+    )
+    .command('deploy-status [STACK]', 'Returns deploy dependency tree')
     .commandDir('../lib/commands', { exclude: /^_.*/ })
     .version(version.DISPLAY_VERSION)
     .demandCommand(1, '') // just print help
@@ -305,6 +310,20 @@ async function initCommandLine() {
         }
       case 'version':
         return data(version.DISPLAY_VERSION);
+
+      case 'deploy-dependency-tree':
+        return await cli.deployDependencyTree();
+      case 'deploy-async':
+        return await cli.deployAsync({
+          stackNames:[ args.STACK ],
+          force: args.force,
+          toolkitStackName,
+        });
+      case 'deploy-status':
+        return await cli.deployStatus({
+          stackNames:[ args.STACK ],
+          toolkitStackName,
+        });
 
       default:
         throw new Error('Unknown command: ' + command);
