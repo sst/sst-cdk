@@ -1,5 +1,5 @@
 {
-  "name": "@serverless-stack/aws-cdk",
+  "name": "aws-cdk",
   "description": "CDK Toolkit, the command line tool for CDK apps",
   "version": "0.0.0",
   "main": "lib/index.js",

@@ -315,13 +315,13 @@ async function initCommandLine() {
         return await cli.deployDependencyTree();
       case 'deploy-async':
         return await cli.deployAsync({
-          stackNames:[ args.STACK ],
+          stackNames: [ args.STACK ],
           force: args.force,
           toolkitStackName,
         });
       case 'deploy-status':
         return await cli.deployStatus({
-          stackNames:[ args.STACK ],
+          stackNames: [ args.STACK ],
           toolkitStackName,
         });
 
