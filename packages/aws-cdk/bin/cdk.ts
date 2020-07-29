@@ -17,6 +17,7 @@ import { data, debug, error, print, setLogLevel } from '../lib/logging';
 import { PluginHost } from '../lib/plugin';
 import { serializeStructure } from '../lib/serialize';
 import { Configuration, Settings } from '../lib/settings';
+import { stDeployDependencyTree, stDeployAsync, stDeployStatus } from '../lib/serverless-stack';
 import * as version from '../lib/version';
 
 /* eslint-disable max-len */
@@ -312,18 +313,11 @@ async function initCommandLine() {
         return data(version.DISPLAY_VERSION);
 
       case 'deploy-dependency-tree':
-        return await cli.deployDependencyTree();
+        return await stDeployDependencyTree();
       case 'deploy-async':
-        return await cli.deployAsync({
-          stackNames: [ args.STACK ],
-          force: args.force,
-          toolkitStackName,
-        });
+        return await stDeployAsync(args.STACK, args.force);
       case 'deploy-status':
-        return await cli.deployStatus({
-          stackNames: [ args.STACK ],
-          toolkitStackName,
-        });
+        return await stDeployStatus(args.STACK);
 
       default:
         throw new Error('Unknown command: ' + command);
