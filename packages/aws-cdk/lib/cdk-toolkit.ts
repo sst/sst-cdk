@@ -290,14 +290,12 @@ export class CdkToolkit {
     const assembly = new CloudAssembly(cxapiAssembly);
     const stacks = await assembly.selectStacks([], { defaultBehavior: DefaultSelection.AllStacks });
 
-    data(JSON.stringify({
+    return {
       stacks: stacks.stackArtifacts.map(stack => ({
         stack: stack.id,
         dependencies: stack.dependencies.map(d => d.id),
       })),
-    }));
-
-    return 0; // exit-code
+    }
   }
 
   public async deployAsync(outputPath: string, options: DeployOptions) {
@@ -349,7 +347,7 @@ export class CdkToolkit {
         ? 'succeeded'
         : 'deploying';
 
-      data(JSON.stringify({ status }));
+      return { status };
     } catch (e) {
       error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
       throw e;
@@ -388,7 +386,7 @@ export class CdkToolkit {
       const status = result.noOp
         ? 'deploying'
         : 'succeeded';
-      data(JSON.stringify({ status }));
+      return { status };
     } catch (e) {
       error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
       throw e;
