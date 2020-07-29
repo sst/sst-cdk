@@ -286,24 +286,30 @@ export class CdkToolkit {
   }
 
   public async deployDependencyTree() {
-    const stacks = await this.selectStacksForList([]);
+    const cxapiAssembly = new cxapi.CloudAssembly('cdk.out');
+    const assembly = new CloudAssembly(cxapiAssembly);
+    const stacks = await assembly.selectStacks([], { defaultBehavior: DefaultSelection.AllStacks });
 
-    for (const stack of stacks.stackArtifacts) {
-      data(JSON.stringify({
+    data(JSON.stringify({
+      stacks: stacks.stackArtifacts.map(stack => ({
         stack: stack.id,
         dependencies: stack.dependencies.map(d => d.id),
-      }));
-    }
+      })),
+    }));
 
     return 0; // exit-code
   }
 
   public async deployAsync(options: DeployOptions) {
-    const stacks = await this.selectSingleStackByName(options.stackNames[0]);
+    const cxapiAssembly = new cxapi.CloudAssembly('cdk.out');
+    const assembly = new CloudAssembly(cxapiAssembly);
+    const stacks = await assembly.selectStacks([options.stackNames[0]], {
+      extend: ExtendedStackSelection.None,
+      defaultBehavior: DefaultSelection.None,
+    });
     const stack = stacks.firstStack;
 
     const parameterMap: { [name: string]: { [name: string]: string | undefined } } = {'*': {}};
-    const stackOutputs: { [key: string]: any } = { };
     const tags = options.tags;
 
     if (Object.keys(stack.template.Resources || {}).length === 0) { // The generated stack has no resources
@@ -339,26 +345,11 @@ export class CdkToolkit {
         usePreviousParameters: options.usePreviousParameters,
       });
 
-      const message = result.noOp
-        ? ' ✅  %s (no changes)'
-        : ' ⏳  %s';
+      const status = result.noOp
+        ? 'succeeded'
+        : 'deploying';
 
-      success('\n' + message, stack.displayName);
-
-      if (Object.keys(result.outputs).length > 0) {
-        print('\nOutputs:');
-
-        stackOutputs[stack.stackName] = result.outputs;
-      }
-
-      for (const name of Object.keys(result.outputs)) {
-        const value = result.outputs[name];
-        print('%s.%s = %s', colors.cyan(stack.id), colors.cyan(name), colors.underline(colors.cyan(value)));
-      }
-
-      print('\nStack ARN:');
-
-      data(result.stackArn);
+      data(JSON.stringify({ status }));
     } catch (e) {
       error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
       throw e;
@@ -366,14 +357,18 @@ export class CdkToolkit {
   }
 
   public async deployStatus(options: DeployOptions) {
-    const stacks = await this.selectSingleStackByName(options.stackNames[0]);
+    const cxapiAssembly = new cxapi.CloudAssembly('cdk.out');
+    const assembly = new CloudAssembly(cxapiAssembly);
+    const stacks = await assembly.selectStacks([options.stackNames[0]], {
+      extend: ExtendedStackSelection.None,
+      defaultBehavior: DefaultSelection.None,
+    });
     const stack = stacks.firstStack;
 
     const parameterMap: { [name: string]: { [name: string]: string | undefined } } = {'*': {}};
-    const stackOutputs: { [key: string]: any } = { };
     const tags = options.tags;
 
-    print('%s: deploying...', colors.bold(stack.displayName));
+    print('%s: cecking status...', colors.bold(stack.displayName));
 
     try {
       const result = await this.props.cloudFormation.deployStatus({
@@ -390,26 +385,10 @@ export class CdkToolkit {
         usePreviousParameters: options.usePreviousParameters,
       });
 
-      const message = result.noOp
-        ? ' ⏳  %s'
-        : ' ✅  %s';
-
-      success('\n' + message, stack.displayName);
-
-      if (Object.keys(result.outputs).length > 0) {
-        print('\nOutputs:');
-
-        stackOutputs[stack.stackName] = result.outputs;
-      }
-
-      for (const name of Object.keys(result.outputs)) {
-        const value = result.outputs[name];
-        print('%s.%s = %s', colors.cyan(stack.id), colors.cyan(name), colors.underline(colors.cyan(value)));
-      }
-
-      print('\nStack ARN:');
-
-      data(result.stackArn);
+      const status = result.noOp
+        ? 'deploying'
+        : 'succeeded';
+      data(JSON.stringify({ status }));
     } catch (e) {
       error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
       throw e;
