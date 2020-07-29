@@ -285,8 +285,8 @@ export class CdkToolkit {
     return 0; // exit-code
   }
 
-  public async deployDependencyTree() {
-    const cxapiAssembly = new cxapi.CloudAssembly('cdk.out');
+  public async deployDependencyTree(outputPath: string) {
+    const cxapiAssembly = new cxapi.CloudAssembly(outputPath);
     const assembly = new CloudAssembly(cxapiAssembly);
     const stacks = await assembly.selectStacks([], { defaultBehavior: DefaultSelection.AllStacks });
 
@@ -300,8 +300,8 @@ export class CdkToolkit {
     return 0; // exit-code
   }
 
-  public async deployAsync(options: DeployOptions) {
-    const cxapiAssembly = new cxapi.CloudAssembly('cdk.out');
+  public async deployAsync(outputPath: string, options: DeployOptions) {
+    const cxapiAssembly = new cxapi.CloudAssembly(outputPath);
     const assembly = new CloudAssembly(cxapiAssembly);
     const stacks = await assembly.selectStacks([options.stackNames[0]], {
       extend: ExtendedStackSelection.None,
@@ -356,8 +356,8 @@ export class CdkToolkit {
     }
   }
 
-  public async deployStatus(options: DeployOptions) {
-    const cxapiAssembly = new cxapi.CloudAssembly('cdk.out');
+  public async deployStatus(outputPath: string, options: DeployOptions) {
+    const cxapiAssembly = new cxapi.CloudAssembly(outputPath);
     const assembly = new CloudAssembly(cxapiAssembly);
     const stacks = await assembly.selectStacks([options.stackNames[0]], {
       extend: ExtendedStackSelection.None,

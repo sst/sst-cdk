@@ -6,26 +6,26 @@ import { execProgram } from '../lib/api/cxapp/exec';
 import { CdkToolkit } from '../lib/cdk-toolkit';
 import { Configuration } from '../lib/settings';
 
-export async function stDeployDependencyTree() {
+export async function stDeployDependencyTree(outputPath: string) {
   const { cli } = await initCommandLine();
 
-  return await cli.deployDependencyTree();
+  return await cli.deployDependencyTree(outputPath);
 }
 
-export async function stDeployAsync(stackName: string, force: boolean) {
+export async function stDeployAsync(outputPath: string, stackName: string, force: boolean) {
   const { cli, toolkitStackName } = await initCommandLine();
 
-  return await cli.deployAsync({
+  return await cli.deployAsync(outputPath, {
     stackNames: [ stackName ],
     force,
     toolkitStackName,
   });
 }
 
-export async function stDeployStatus(stackName: string) {
+export async function stDeployStatus(outputPath: string, stackName: string) {
   const { cli, toolkitStackName } = await initCommandLine();
 
-  return await cli.deployStatus({
+  return await cli.deployStatus(outputPath, {
     stackNames: [ stackName ],
     toolkitStackName,
   });

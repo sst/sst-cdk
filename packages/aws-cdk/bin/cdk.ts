@@ -313,11 +313,11 @@ async function initCommandLine() {
         return data(version.DISPLAY_VERSION);
 
       case 'deploy-dependency-tree':
-        return await stDeployDependencyTree();
+        return await stDeployDependencyTree(args.output);
       case 'deploy-async':
-        return await stDeployAsync(args.STACK, args.force);
+        return await stDeployAsync(args.output, args.STACK, args.force);
       case 'deploy-status':
-        return await stDeployStatus(args.STACK);
+        return await stDeployStatus(args.output, args.STACK);
 
       default:
         throw new Error('Unknown command: ' + command);
