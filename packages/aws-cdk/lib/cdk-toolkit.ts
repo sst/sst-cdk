@@ -285,14 +285,14 @@ export class CdkToolkit {
     return 0; // exit-code
   }
 
-  public async deployDependencyTree(outputPath: string) {
+  public async listStackDependencies(outputPath: string) {
     const cxapiAssembly = new cxapi.CloudAssembly(outputPath);
     const assembly = new CloudAssembly(cxapiAssembly);
     const stacks = await assembly.selectStacks([], { defaultBehavior: DefaultSelection.AllStacks });
 
     return {
       stacks: stacks.stackArtifacts.map(stack => ({
-        stack: stack.id,
+        name: stack.id,
         dependencies: stack.dependencies.map(d => d.id),
       })),
     }

@@ -17,7 +17,7 @@ import { data, debug, error, print, setLogLevel } from '../lib/logging';
 import { PluginHost } from '../lib/plugin';
 import { serializeStructure } from '../lib/serialize';
 import { Configuration, Settings } from '../lib/settings';
-import { stDeployDependencyTree, stDeployAsync, stDeployStatus } from '../lib/serverless-stack';
+import { stListStackDependencies, stDeployAsync, stDeployStatus } from '../lib/serverless-stack';
 import * as version from '../lib/version';
 
 /* eslint-disable max-len */
@@ -107,7 +107,7 @@ async function parseCommandLineArguments() {
       .option('list', { type: 'boolean', desc: 'List the available templates' })
       .option('generate-only', { type: 'boolean', default: false, desc: 'If true, only generates project files, without executing additional operations such as setting up a git repo, installing dependencies or compiling the project'}),
     )
-    .command('deploy-dependency-tree', 'Returns deploy dependency tree')
+    .command('list-stack-dependencies', 'Returns deploy dependency tree')
     .command('deploy-async [STACK]', 'Returns deploy dependency tree', yargs => yargs
       .option('force', { alias: 'f', type: 'boolean', desc: 'Always deploy stack even if templates are identical', default: false }),
     )
@@ -312,8 +312,8 @@ async function initCommandLine() {
       case 'version':
         return data(version.DISPLAY_VERSION);
 
-      case 'deploy-dependency-tree':
-        return await stDeployDependencyTree(args.output);
+      case 'list-stack-dependencies':
+        return await stListStackDependencies(args.output);
       case 'deploy-async':
         return await stDeployAsync(args.output, args.STACK, args.force);
       case 'deploy-status':
