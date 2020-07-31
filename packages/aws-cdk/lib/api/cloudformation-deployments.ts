@@ -159,7 +159,7 @@ export class CloudFormationDeployments {
     });
   }
 
-  public async deployStackAsync(options: DeployStackOptions): Promise<DeployStackResult> {
+  public async deployStackAsync(options: DeployStackOptions) {
     const { stackSdk, resolvedEnvironment, cloudFormationRoleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
 
     const toolkitInfo = await ToolkitInfo.lookup(resolvedEnvironment, stackSdk, options.toolkitStackName);
@@ -170,7 +170,7 @@ export class CloudFormationDeployments {
     // Do a verification of the bootstrap stack version
     this.validateBootstrapStackVersion(options.stack.stackName, options.stack.requiresBootstrapStackVersion, toolkitInfo);
 
-    return deployStackAsync({
+    const result = await deployStackAsync({
       stack: options.stack,
       resolvedEnvironment,
       deployName: options.deployName,
@@ -187,6 +187,8 @@ export class CloudFormationDeployments {
       parameters: options.parameters,
       usePreviousParameters: options.usePreviousParameters,
     });
+
+    return { result, environment: resolvedEnvironment };
   }
 
   public async deployStatus(options: DeployStackOptions): Promise<DeployStackResult> {

@@ -323,13 +323,13 @@ export class CdkToolkit {
           fromDeploy: true,
         });
       }
-      print(JSON.stringify({ status: 'skipped' }));
+      return { status: 'no_resources' };
     }
 
     print('%s: deploying...', colors.bold(stack.displayName));
 
     try {
-      const result = await this.props.cloudFormation.deployStackAsync({
+      const { result, environment } = await this.props.cloudFormation.deployStackAsync({
         stack,
         deployName: stack.stackName,
         roleArn: options.roleArn,
@@ -343,11 +343,11 @@ export class CdkToolkit {
         usePreviousParameters: options.usePreviousParameters,
       });
 
-      const status = result.noOp
-        ? 'succeeded'
-        : 'deploying';
-
-      return { status };
+      return {
+        status: result.noOp ? 'unchanged' : 'deploying',
+        region: environment.region,
+        account: environment.account,
+      };
     } catch (e) {
       error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
       throw e;
@@ -366,7 +366,7 @@ export class CdkToolkit {
     const parameterMap: { [name: string]: { [name: string]: string | undefined } } = {'*': {}};
     const tags = options.tags;
 
-    print('%s: cecking status...', colors.bold(stack.displayName));
+    print('%s: checking status...', colors.bold(stack.displayName));
 
     try {
       const result = await this.props.cloudFormation.deployStatus({

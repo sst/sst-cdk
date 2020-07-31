@@ -370,14 +370,9 @@ export async function deployStackAsync(options: DeployStackOptions): Promise<Dep
     return { noOp: true, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact };
   }
 
-  const execute = options.execute === undefined ? true : options.execute;
-  if (execute) {
-    debug('Initiating execution of changeset %s on stack %s', changeSetName, deployName);
-    await cfn.executeChangeSet({StackName: deployName, ChangeSetName: changeSetName}).promise();
-    debug('Execution of changeset %s on stack %s has started; waiting for the update to complete...', changeSetName, deployName);
-  } else {
-    print('Changeset %s created and waiting in review for manual execution (--no-execute)', changeSetName);
-  }
+  debug('Initiating execution of changeset %s on stack %s', changeSetName, deployName);
+  await cfn.executeChangeSet({StackName: deployName, ChangeSetName: changeSetName}).promise();
+  debug('Execution of changeset %s on stack %s has started; waiting for the update to complete...', changeSetName, deployName);
 
   return { noOp: false, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact };
 }
