@@ -394,6 +394,12 @@ export async function deployStatus(options: DeployStackOptions): Promise<DeployS
       stackArtifact,
     };
   }
+  else if (status.isCreationFailure) {
+    throw new Error(`The stack named ${deployName} failed creation, it may need to be manually deleted from the AWS console: ${status}`);
+  }
+  else if ( ! status.isDeploySuccess) {
+    throw new Error(`The stack named ${deployName} failed to deploy: ${status}`);
+  }
 
   return {
     noOp: false,
