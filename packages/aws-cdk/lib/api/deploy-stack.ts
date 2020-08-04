@@ -554,41 +554,41 @@ async function canSkipDeploy(
   params: StackParameters): Promise<boolean> {
 
   const deployName = deployStackOptions.deployName || deployStackOptions.stack.stackName;
-  debug(`${deployName}: checking if we can skip deploy`);
+  print(`${deployName}: checking if we can skip deploy`);
 
   // Forced deploy
   if (deployStackOptions.force) {
-    debug(`${deployName}: forced deployment`);
+    print(`${deployName}: forced deployment`);
     return false;
   }
 
   // No existing stack
   if (!cloudFormationStack.exists) {
-    debug(`${deployName}: no existing stack`);
+    print(`${deployName}: no existing stack`);
     return false;
   }
 
   // Template has changed (assets taken into account here)
   if (JSON.stringify(deployStackOptions.stack.template) !== JSON.stringify(await cloudFormationStack.template())) {
-    debug(`${deployName}: template has changed`);
+    print(`${deployName}: template has changed`);
     return false;
   }
 
   // Tags have changed
   if (!compareTags(cloudFormationStack.tags, deployStackOptions.tags ?? [])) {
-    debug(`${deployName}: tags have changed`);
+    print(`${deployName}: tags have changed`);
     return false;
   }
 
   // Termination protection has been updated
   if (!!deployStackOptions.stack.terminationProtection !== !!cloudFormationStack.terminationProtection) {
-    debug(`${deployName}: termination protection has been updated`);
+    print(`${deployName}: termination protection has been updated`);
     return false;
   }
 
   // Parameters have changed
   if (params.changed) {
-    debug(`${deployName}: parameters have changed`);
+    print(`${deployName}: parameters have changed`);
     return false;
   }
 
