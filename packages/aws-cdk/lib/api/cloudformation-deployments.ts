@@ -4,7 +4,7 @@ import { Tag } from '../cdk-toolkit';
 import { debug } from '../logging';
 import { publishAssets } from '../util/asset-publishing';
 import { Mode, SdkProvider } from './aws-auth';
-import { deployStack, deployStackAsync, deployStatus, DeployStackResult, destroyStack } from './deploy-stack';
+import { deployStack, deployStackAsync, deployStatus, DeployStackResult, destroyStack, destroyStackAsync, destroyStatus } from './deploy-stack';
 import { ToolkitInfo } from './toolkit-info';
 import { CloudFormationStack, Template } from './util/cloudformation';
 
@@ -219,6 +219,30 @@ export class CloudFormationDeployments {
     const { stackSdk, cloudFormationRoleArn: roleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
 
     return destroyStack({
+      sdk: stackSdk,
+      roleArn,
+      stack: options.stack,
+      deployName: options.deployName,
+      quiet: options.quiet,
+    });
+  }
+
+  public async destroyStackAsync(options: DestroyStackOptions) {
+    const { stackSdk, cloudFormationRoleArn: roleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
+
+    return destroyStackAsync({
+      sdk: stackSdk,
+      roleArn,
+      stack: options.stack,
+      deployName: options.deployName,
+      quiet: options.quiet,
+    });
+  }
+
+  public async destroyStatus(options: DestroyStackOptions) {
+    const { stackSdk, cloudFormationRoleArn: roleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
+
+    return destroyStatus({
       sdk: stackSdk,
       roleArn,
       stack: options.stack,

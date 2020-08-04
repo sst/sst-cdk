@@ -17,7 +17,7 @@ import { data, debug, error, print, setLogLevel } from '../lib/logging';
 import { PluginHost } from '../lib/plugin';
 import { serializeStructure } from '../lib/serialize';
 import { Configuration, Settings } from '../lib/settings';
-import { stListStackDependencies, stDeployAsync, stDeployStatus } from '../lib/serverless-stack';
+import { stListStackDependencies, stDeployAsync, stDeployStatus, stDestroyAsync, stDestroyStatus } from '../lib/serverless-stack';
 import * as version from '../lib/version';
 
 /* eslint-disable max-len */
@@ -112,6 +112,8 @@ async function parseCommandLineArguments() {
       .option('force', { alias: 'f', type: 'boolean', desc: 'Always deploy stack even if templates are identical', default: false }),
     )
     .command('deploy-status [STACK]', 'Returns deploy dependency tree')
+    .command('destroy-async [STACK]', 'Returns deploy dependency tree')
+    .command('destroy-status [STACK]', 'Returns deploy dependency tree')
     .commandDir('../lib/commands', { exclude: /^_.*/ })
     .version(version.DISPLAY_VERSION)
     .demandCommand(1, '') // just print help
@@ -318,6 +320,10 @@ async function initCommandLine() {
         return await stDeployAsync(args.output, args.STACK, args.force);
       case 'deploy-status':
         return await stDeployStatus(args.output, args.STACK);
+      case 'destroy-async':
+        return await stDestroyAsync(args.output, args.STACK);
+      case 'destroy-status':
+        return await stDestroyStatus(args.output, args.STACK);
 
       default:
         throw new Error('Unknown command: ' + command);

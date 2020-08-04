@@ -500,6 +500,45 @@ export async function destroyStack(options: DestroyStackOptions) {
   }
 }
 
+/** @experimental */
+export async function destroyStackAsync(options: DestroyStackOptions) {
+  const deployName = options.deployName || options.stack.stackName;
+  const cfn = options.sdk.cloudFormation();
+
+  const currentStack = await CloudFormationStack.lookup(cfn, deployName);
+  if (!currentStack.exists) {
+    return { status: 'destroyed' };
+  }
+
+  await cfn.deleteStack({ StackName: deployName, RoleARN: options.roleArn }).promise();
+
+  return { status: 'destroying' };
+}
+
+/** @experimental */
+export async function destroyStatus(options: DestroyStackOptions) {
+  const deployName = options.deployName || options.stack.stackName;
+  const cfn = options.sdk.cloudFormation();
+
+  const currentStack = await CloudFormationStack.lookup(cfn, deployName);
+  if (!currentStack.exists) {
+    return { status: 'destroyed' };
+  }
+
+  const status = currentStack.stackStatus;
+  if (status.isInProgress) {
+    return { status: 'destroying' };
+  }
+  else if (status.isDeleted) {
+    return { status: 'destroyed' };
+  }
+  else if (status.name === 'DELETE_COMPLETE') {
+    return { status: 'destroyed' };
+  }
+
+  throw new Error(`Failed to destroy ${deployName}: ${status}`);
+}
+
 /**
  * Checks whether we can skip deployment
  *

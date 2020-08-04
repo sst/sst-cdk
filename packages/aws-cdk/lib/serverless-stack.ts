@@ -31,6 +31,24 @@ export async function stDeployStatus(outputPath: string, stackName: string) {
   });
 }
 
+export async function stDestroyAsync(outputPath: string, stackName: string) {
+  const { cli, toolkitStackName } = await initCommandLine();
+
+  return await cli.destroyAsync(outputPath, {
+    stackNames: [ stackName ],
+    toolkitStackName,
+  });
+}
+
+export async function stDestroyStatus(outputPath: string, stackName: string) {
+  const { cli, toolkitStackName } = await initCommandLine();
+
+  return await cli.destroyStatus(outputPath, {
+    stackNames: [ stackName ],
+    toolkitStackName,
+  });
+}
+
 async function initCommandLine() {
   const configuration = new Configuration();
   await configuration.load();

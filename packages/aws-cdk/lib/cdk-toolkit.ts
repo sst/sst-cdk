@@ -393,6 +393,53 @@ export class CdkToolkit {
     }
   }
 
+  public async destroyAsync(outputPath: string, options: DeployOptions) {
+    const cxapiAssembly = new cxapi.CloudAssembly(outputPath);
+    const assembly = new CloudAssembly(cxapiAssembly);
+    const stacks = await assembly.selectStacks([options.stackNames[0]], {
+      extend: ExtendedStackSelection.None,
+      defaultBehavior: DefaultSelection.None,
+    });
+    const stack = stacks.firstStack;
+
+    success('%s: destroying...', colors.blue(stack.displayName));
+    try {
+      const { status } = await this.props.cloudFormation.destroyStackAsync({
+        stack,
+        deployName: stack.stackName,
+        roleArn: options.roleArn,
+      });
+      return { status };
+    } catch (e) {
+      error('\n ❌  %s failed: %s', colors.blue(stack.displayName), e);
+      throw e;
+    }
+  }
+
+  public async destroyStatus(outputPath: string, options: DeployOptions) {
+    const cxapiAssembly = new cxapi.CloudAssembly(outputPath);
+    const assembly = new CloudAssembly(cxapiAssembly);
+    const stacks = await assembly.selectStacks([options.stackNames[0]], {
+      extend: ExtendedStackSelection.None,
+      defaultBehavior: DefaultSelection.None,
+    });
+    const stack = stacks.firstStack;
+
+    print('%s: checking status...', colors.bold(stack.displayName));
+
+    try {
+      const { status } = await this.props.cloudFormation.destroyStatus({
+        stack,
+        deployName: stack.stackName,
+        roleArn: options.roleArn,
+      });
+      return { status };
+    } catch (e) {
+      error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
+      throw e;
+    }
+  }
+
   /**
    * Synthesize the given set of stacks (called when the user runs 'cdk synth')
    *
