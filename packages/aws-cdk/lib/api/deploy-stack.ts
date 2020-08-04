@@ -311,9 +311,11 @@ export async function deployStackAsync(options: DeployStackOptions): Promise<Dep
   const finalParameterValues = { ...options.parameters, ...assetParams };
 
   const templateParams = TemplateParameters.fromTemplate(stackArtifact.template);
+  print('OPTIONS usePreviousParameters: %s', options.usePreviousParameters);
   const stackParams = options.usePreviousParameters
     ? templateParams.diff(finalParameterValues, cloudFormationStack.parameters)
     : templateParams.toStackParameters(finalParameterValues);
+  console.log({ stackParams });
 
   if (await canSkipDeploy(options, cloudFormationStack, stackParams)) {
     debug(`${deployName}: skipping deployment (use --force to override)`);
@@ -554,41 +556,41 @@ async function canSkipDeploy(
   params: StackParameters): Promise<boolean> {
 
   const deployName = deployStackOptions.deployName || deployStackOptions.stack.stackName;
-  print(`${deployName}: checking if we can skip deploy`);
+  debug(`${deployName}: checking if we can skip deploy`);
 
   // Forced deploy
   if (deployStackOptions.force) {
-    print(`${deployName}: forced deployment`);
+    debug(`${deployName}: forced deployment`);
     return false;
   }
 
   // No existing stack
   if (!cloudFormationStack.exists) {
-    print(`${deployName}: no existing stack`);
+    debug(`${deployName}: no existing stack`);
     return false;
   }
 
   // Template has changed (assets taken into account here)
   if (JSON.stringify(deployStackOptions.stack.template) !== JSON.stringify(await cloudFormationStack.template())) {
-    print(`${deployName}: template has changed`);
+    debug(`${deployName}: template has changed`);
     return false;
   }
 
   // Tags have changed
   if (!compareTags(cloudFormationStack.tags, deployStackOptions.tags ?? [])) {
-    print(`${deployName}: tags have changed`);
+    debug(`${deployName}: tags have changed`);
     return false;
   }
 
   // Termination protection has been updated
   if (!!deployStackOptions.stack.terminationProtection !== !!cloudFormationStack.terminationProtection) {
-    print(`${deployName}: termination protection has been updated`);
+    debug(`${deployName}: termination protection has been updated`);
     return false;
   }
 
   // Parameters have changed
   if (params.changed) {
-    print(`${deployName}: parameters have changed`);
+    debug(`${deployName}: parameters have changed`);
     return false;
   }
 
