@@ -311,11 +311,9 @@ export async function deployStackAsync(options: DeployStackOptions): Promise<Dep
   const finalParameterValues = { ...options.parameters, ...assetParams };
 
   const templateParams = TemplateParameters.fromTemplate(stackArtifact.template);
-  print('OPTIONS usePreviousParameters: %s', options.usePreviousParameters);
   const stackParams = options.usePreviousParameters
     ? templateParams.diff(finalParameterValues, cloudFormationStack.parameters)
     : templateParams.toStackParameters(finalParameterValues);
-  console.log({ stackParams });
 
   if (await canSkipDeploy(options, cloudFormationStack, stackParams)) {
     debug(`${deployName}: skipping deployment (use --force to override)`);
