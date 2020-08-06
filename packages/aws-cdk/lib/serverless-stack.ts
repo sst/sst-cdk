@@ -51,7 +51,7 @@ export async function sstList(outputPath: string) {
   const { cli } = await initCommandLine();
   return await cli.list([], {
     outputPath,
-    long: true,
+    sst: true,
   });
 }
 

@@ -347,7 +347,7 @@ export class CdkToolkit {
     }
   }
 
-  public async list(selectors: string[], options: { long?: boolean, outputPath?: string } = { }) {
+  public async list(selectors: string[], options: { long?: boolean, sst?: boolean, outputPath?: string } = { }) {
     let stacks;
     if (options.outputPath) {
       const cxapiAssembly = new cxapi.CloudAssembly(options.outputPath);
@@ -366,10 +366,20 @@ export class CdkToolkit {
           id: stack.id,
           name: stack.stackName,
           environment: stack.environment,
-          dependencies: stack.dependencies.map(d => d.id),
         });
       }
       return long; // will be YAML formatted output
+    }
+
+    // if we are in "sst" mode, emit the array as-is (JSON/YAML)
+    if (options.sst) {
+      return {
+        stacks: stacks.stackArtifacts.map(stack => ({
+          id: stack.id,
+          name: stack.stackName,
+          dependencies: stack.dependencies.map(d => d.id),
+        })),
+      };
     }
 
     // just print stack IDs
