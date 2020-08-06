@@ -17,7 +17,7 @@ import { data, debug, error, print, setLogLevel } from '../lib/logging';
 import { PluginHost } from '../lib/plugin';
 import { serializeStructure } from '../lib/serialize';
 import { Configuration, Settings } from '../lib/settings';
-import { stListStackDependencies, stDeployAsync, stDeployStatus, stDestroyAsync, stDestroyStatus } from '../lib/serverless-stack';
+import { sstEnv, sstBootstrap, sstList, sstSynth, sstDeploy, sstDestroy, sstDeployAsync, sstDeployStatus, sstDestroyAsync, sstDestroyStatus } from '../lib/serverless-stack';
 import * as version from '../lib/version';
 
 /* eslint-disable max-len */
@@ -107,13 +107,18 @@ async function parseCommandLineArguments() {
       .option('list', { type: 'boolean', desc: 'List the available templates' })
       .option('generate-only', { type: 'boolean', default: false, desc: 'If true, only generates project files, without executing additional operations such as setting up a git repo, installing dependencies or compiling the project'}),
     )
-    .command('list-stack-dependencies', 'Returns deploy dependency tree')
-    .command('deploy-async [STACK]', 'Returns deploy dependency tree', yargs => yargs
+    .command('sst-env', '')
+    .command('sst-list', '')
+    .command('sst-bootstrap', '')
+    .command('sst-synth', '')
+    .command('sst-deploy [STACK]', '')
+    .command('sst-destroy [STACK]', '')
+    .command('sst-deploy-async [STACK]', '', yargs => yargs
       .option('force', { alias: 'f', type: 'boolean', desc: 'Always deploy stack even if templates are identical', default: false }),
     )
-    .command('deploy-status [STACK]', 'Returns deploy dependency tree')
-    .command('destroy-async [STACK]', 'Returns deploy dependency tree')
-    .command('destroy-status [STACK]', 'Returns deploy dependency tree')
+    .command('sst-deploy-status [STACK]', '')
+    .command('sst-destroy-async [STACK]', '')
+    .command('sst-destroy-status [STACK]', '')
     .commandDir('../lib/commands', { exclude: /^_.*/ })
     .version(version.DISPLAY_VERSION)
     .demandCommand(1, '') // just print help
@@ -314,16 +319,26 @@ async function initCommandLine() {
       case 'version':
         return data(version.DISPLAY_VERSION);
 
-      case 'list-stack-dependencies':
-        return await stListStackDependencies(args.output);
-      case 'deploy-async':
-        return await stDeployAsync(args.output, args.STACK, args.force);
-      case 'deploy-status':
-        return await stDeployStatus(args.output, args.STACK);
-      case 'destroy-async':
-        return await stDestroyAsync(args.output, args.STACK);
-      case 'destroy-status':
-        return await stDestroyStatus(args.output, args.STACK);
+      case 'sst-env':
+        return await sstEnv();
+      case 'sst-bootstrap':
+        return await sstBootstrap();
+      case 'sst-synth':
+        return await sstSynth();
+      case 'sst-deploy':
+        return await sstDeploy(args.STACK);
+      case 'sst-destroy':
+        return await sstDestroy(args.STACK);
+      case 'sst-list':
+        return await sstList(args.output);
+      case 'sst-deploy-async':
+        return await sstDeployAsync(args.output, args.STACK, args.force);
+      case 'sst-deploy-status':
+        return await sstDeployStatus(args.output, args.STACK);
+      case 'sst-destroy-async':
+        return await sstDestroyAsync(args.output, args.STACK);
+      case 'sst-destroy-status':
+        return await sstDestroyStatus(args.output, args.STACK);
 
       default:
         throw new Error('Unknown command: ' + command);

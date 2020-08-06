@@ -158,6 +158,12 @@ export interface DeployStackOptions {
    * @default false
    */
   force?: boolean;
+
+  /**
+   * Start dpeloying and returns right away.
+   * @default false
+   */
+  async?: boolean;
 }
 
 const LARGE_TEMPLATE_SIZE_KB = 50;
@@ -257,6 +263,10 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
   if (execute) {
     debug('Initiating execution of changeset %s on stack %s', changeSetName, deployName);
     await cfn.executeChangeSet({StackName: deployName, ChangeSetName: changeSetName}).promise();
+    if (options.async) {
+      return { noOp: false, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact };
+    }
+
     // eslint-disable-next-line max-len
     const monitor = options.quiet ? undefined : new StackActivityMonitor(cfn, deployName, stackArtifact, {
       resourcesTotal: (changeSetDescription.Changes ?? []).length,
@@ -275,104 +285,6 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
   } else {
     print('Changeset %s created and waiting in review for manual execution (--no-execute)', changeSetName);
   }
-
-  return { noOp: false, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact };
-}
-
-/** @experimental */
-export async function deployStackAsync(options: DeployStackOptions): Promise<DeployStackResult> {
-  const stackArtifact = options.stack;
-
-  const stackEnv = options.resolvedEnvironment;
-
-  const cfn = options.sdk.cloudFormation();
-  const deployName = options.deployName || stackArtifact.stackName;
-  let cloudFormationStack = await CloudFormationStack.lookup(cfn, deployName);
-
-  if (cloudFormationStack.stackStatus.isCreationFailure) {
-    debug(`Found existing stack ${deployName} that had previously failed creation. Deleting it before attempting to re-create it.`);
-    await cfn.deleteStack({ StackName: deployName }).promise();
-    const deletedStack = await waitForStackDelete(cfn, deployName);
-    if (deletedStack && deletedStack.stackStatus.name !== 'DELETE_COMPLETE') {
-      throw new Error(`Failed deleting stack ${deployName} that had previously failed creation (current state: ${deletedStack.stackStatus})`);
-    }
-    // Update variable to mark that the stack does not exist anymore, but avoid
-    // doing an actual lookup in CloudFormation (which would be silly to do if
-    // we just deleted it).
-    cloudFormationStack = CloudFormationStack.doesNotExist(cfn, deployName);
-  }
-
-  // Detect "legacy" assets (which remain in the metadata) and publish them via
-  // an ad-hoc asset manifest, while passing their locations via template
-  // parameters.
-  const legacyAssets = new AssetManifestBuilder();
-  const assetParams = await addMetadataAssetsToManifest(stackArtifact, legacyAssets, options.toolkitInfo, options.reuseAssets);
-
-  const finalParameterValues = { ...options.parameters, ...assetParams };
-
-  const templateParams = TemplateParameters.fromTemplate(stackArtifact.template);
-  const stackParams = options.usePreviousParameters
-    ? templateParams.diff(finalParameterValues, cloudFormationStack.parameters)
-    : templateParams.toStackParameters(finalParameterValues);
-
-  if (await canSkipDeploy(options, cloudFormationStack, stackParams)) {
-    debug(`${deployName}: skipping deployment (use --force to override)`);
-    return {
-      noOp: true,
-      outputs: cloudFormationStack.outputs,
-      stackArn: cloudFormationStack.stackId,
-      stackArtifact,
-    };
-  } else {
-    debug(`${deployName}: deploying...`);
-  }
-
-  const executionId = uuid.v4();
-  const bodyParameter = await makeBodyParameter(stackArtifact, options.resolvedEnvironment, legacyAssets, options.toolkitInfo);
-
-  await publishAssets(legacyAssets.toManifest(stackArtifact.assembly.directory), options.sdkProvider, stackEnv);
-
-  const changeSetName = `CDK-${executionId}`;
-  const update = cloudFormationStack.exists && cloudFormationStack.stackStatus.name !== 'REVIEW_IN_PROGRESS';
-
-  debug(`Attempting to create ChangeSet ${changeSetName} to ${update ? 'update' : 'create'} stack ${deployName}`);
-  print('%s: creating CloudFormation changeset...', colors.bold(deployName));
-  const changeSet = await cfn.createChangeSet({
-    StackName: deployName,
-    ChangeSetName: changeSetName,
-    ChangeSetType: update ? 'UPDATE' : 'CREATE',
-    Description: `CDK Changeset for execution ${executionId}`,
-    TemplateBody: bodyParameter.TemplateBody,
-    TemplateURL: bodyParameter.TemplateURL,
-    Parameters: stackParams.apiParameters,
-    RoleARN: options.roleArn,
-    NotificationARNs: options.notificationArns,
-    Capabilities: [ 'CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND' ],
-    Tags: options.tags,
-  }).promise();
-  debug('Initiated creation of changeset: %s; waiting for it to finish creating...', changeSet.Id);
-  const changeSetDescription = await waitForChangeSet(cfn, deployName, changeSetName);
-
-  // Update termination protection only if it has changed.
-  const terminationProtection = stackArtifact.terminationProtection ?? false;
-  if (!!cloudFormationStack.terminationProtection !== terminationProtection) {
-    debug('Updating termination protection from %s to %s for stack %s', cloudFormationStack.terminationProtection, terminationProtection, deployName);
-    await cfn.updateTerminationProtection({
-      StackName: deployName,
-      EnableTerminationProtection: terminationProtection,
-    }).promise();
-    debug('Termination protection updated to %s for stack %s', terminationProtection, deployName);
-  }
-
-  if (changeSetHasNoChanges(changeSetDescription)) {
-    debug('No changes are to be performed on %s.', deployName);
-    await cfn.deleteChangeSet({ StackName: deployName, ChangeSetName: changeSetName }).promise();
-    return { noOp: true, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact };
-  }
-
-  debug('Initiating execution of changeset %s on stack %s', changeSetName, deployName);
-  await cfn.executeChangeSet({StackName: deployName, ChangeSetName: changeSetName}).promise();
-  debug('Execution of changeset %s on stack %s has started; waiting for the update to complete...', changeSetName, deployName);
 
   return { noOp: false, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact };
 }
@@ -476,21 +388,29 @@ export interface DestroyStackOptions {
   roleArn?: string;
   deployName?: string;
   quiet?: boolean;
+  async?: boolean;
 }
 
 /** @experimental */
-export async function destroyStack(options: DestroyStackOptions) {
+export async function destroyStack(options: DestroyStackOptions): Promise<any> {
   const deployName = options.deployName || options.stack.stackName;
   const cfn = options.sdk.cloudFormation();
 
   const currentStack = await CloudFormationStack.lookup(cfn, deployName);
   if (!currentStack.exists) {
-    return;
+    return options.async
+      ? { status: 'destroyed' }
+      : undefined;
   }
   const monitor = options.quiet ? undefined : new StackActivityMonitor(cfn, deployName, options.stack).start();
 
   try {
     await cfn.deleteStack({ StackName: deployName, RoleARN: options.roleArn }).promise();
+
+    if (options.async) {
+      return { status: 'destroying' };
+    }
+
     const destroyedStack = await waitForStackDelete(cfn, deployName);
     if (destroyedStack && destroyedStack.stackStatus.name !== 'DELETE_COMPLETE') {
       throw new Error(`Failed to destroy ${deployName}: ${destroyedStack.stackStatus}`);
@@ -498,21 +418,6 @@ export async function destroyStack(options: DestroyStackOptions) {
   } finally {
     if (monitor) { await monitor.stop(); }
   }
-}
-
-/** @experimental */
-export async function destroyStackAsync(options: DestroyStackOptions) {
-  const deployName = options.deployName || options.stack.stackName;
-  const cfn = options.sdk.cloudFormation();
-
-  const currentStack = await CloudFormationStack.lookup(cfn, deployName);
-  if (!currentStack.exists) {
-    return { status: 'destroyed' };
-  }
-
-  await cfn.deleteStack({ StackName: deployName, RoleARN: options.roleArn }).promise();
-
-  return { status: 'destroying' };
 }
 
 /** @experimental */

@@ -4,7 +4,7 @@ import { Tag } from '../cdk-toolkit';
 import { debug } from '../logging';
 import { publishAssets } from '../util/asset-publishing';
 import { Mode, SdkProvider } from './aws-auth';
-import { deployStack, deployStackAsync, deployStatus, DeployStackResult, destroyStack, destroyStackAsync, destroyStatus } from './deploy-stack';
+import { deployStack, deployStatus, DeployStackResult, destroyStack, destroyStatus } from './deploy-stack';
 import { ToolkitInfo } from './toolkit-info';
 import { CloudFormationStack, Template } from './util/cloudformation';
 
@@ -88,6 +88,12 @@ export interface DeployStackOptions {
    * @default true
    */
   usePreviousParameters?: boolean;
+
+  /**
+   * Start dpeloying and returns right away.
+   * @default false
+   */
+  async?: boolean;
 }
 
 export interface DestroyStackOptions {
@@ -96,6 +102,7 @@ export interface DestroyStackOptions {
   roleArn?: string;
   quiet?: boolean;
   force?: boolean;
+  async?: boolean;
 }
 
 export interface StackExistsOptions {
@@ -129,6 +136,9 @@ export class CloudFormationDeployments {
     return stack.template();
   }
 
+  public async env() {
+  }
+
   public async deployStack(options: DeployStackOptions): Promise<DeployStackResult> {
     const { stackSdk, resolvedEnvironment, cloudFormationRoleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
 
@@ -156,39 +166,8 @@ export class CloudFormationDeployments {
       force: options.force,
       parameters: options.parameters,
       usePreviousParameters: options.usePreviousParameters,
+      async: options.async,
     });
-  }
-
-  public async deployStackAsync(options: DeployStackOptions) {
-    const { stackSdk, resolvedEnvironment, cloudFormationRoleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
-
-    const toolkitInfo = await ToolkitInfo.lookup(resolvedEnvironment, stackSdk, options.toolkitStackName);
-
-    // Publish any assets before doing the actual deploy
-    await this.publishStackAssets(options.stack, toolkitInfo);
-
-    // Do a verification of the bootstrap stack version
-    this.validateBootstrapStackVersion(options.stack.stackName, options.stack.requiresBootstrapStackVersion, toolkitInfo);
-
-    const result = await deployStackAsync({
-      stack: options.stack,
-      resolvedEnvironment,
-      deployName: options.deployName,
-      notificationArns: options.notificationArns,
-      quiet: options.quiet,
-      sdk: stackSdk,
-      sdkProvider: this.sdkProvider,
-      roleArn: cloudFormationRoleArn,
-      reuseAssets: options.reuseAssets,
-      toolkitInfo,
-      tags: options.tags,
-      execute: options.execute,
-      force: options.force,
-      parameters: options.parameters,
-      usePreviousParameters: options.usePreviousParameters,
-    });
-
-    return { result, environment: resolvedEnvironment };
   }
 
   public async deployStatus(options: DeployStackOptions): Promise<DeployStackResult> {
@@ -215,7 +194,7 @@ export class CloudFormationDeployments {
     });
   }
 
-  public async destroyStack(options: DestroyStackOptions): Promise<void> {
+  public async destroyStack(options: DestroyStackOptions): Promise<any> {
     const { stackSdk, cloudFormationRoleArn: roleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
 
     return destroyStack({
@@ -224,18 +203,7 @@ export class CloudFormationDeployments {
       stack: options.stack,
       deployName: options.deployName,
       quiet: options.quiet,
-    });
-  }
-
-  public async destroyStackAsync(options: DestroyStackOptions) {
-    const { stackSdk, cloudFormationRoleArn: roleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
-
-    return destroyStackAsync({
-      sdk: stackSdk,
-      roleArn,
-      stack: options.stack,
-      deployName: options.deployName,
-      quiet: options.quiet,
+      async: options.async,
     });
   }
 

@@ -1,28 +1,149 @@
-import { ToolkitInfo } from '../lib';
-import { SdkProvider } from '../lib/api/aws-auth';
-import { CloudFormationDeployments } from '../lib/api/cloudformation-deployments';
-import { CloudExecutable } from '../lib/api/cxapp/cloud-executable';
-import { execProgram } from '../lib/api/cxapp/exec';
-import { CdkToolkit } from '../lib/cdk-toolkit';
-import { Configuration } from '../lib/settings';
+import { ToolkitInfo } from './api/toolkit-info';
+import { SdkProvider } from './api/aws-auth';
+import { CloudFormationDeployments } from './api/cloudformation-deployments';
+import { CloudExecutable } from './api/cxapp/cloud-executable';
+import { execProgram } from './api/cxapp/exec';
+import { CdkToolkit } from './cdk-toolkit';
+import { Configuration } from './settings';
+import { RequireApproval } from './diff';
 
-export async function stListStackDependencies(outputPath: string) {
+export async function sstEnv() {
   const { cli } = await initCommandLine();
-
-  return await cli.listStackDependencies(outputPath);
+  return await cli.env();
 }
 
-export async function stDeployAsync(outputPath: string, stackName: string, force: boolean) {
-  const { cli, toolkitStackName } = await initCommandLine();
-
-  return await cli.deployAsync(outputPath, {
-    stackNames: [ stackName ],
-    force,
+/**
+ * Bootstrap and returns the boostrapped environment. Only returns 1 environment.
+ *
+ * Used by sst cli.
+ *
+ * @returns {
+ *    environment: { account, region }
+ *  }
+ */
+export async function sstBootstrap() {
+  const { cli } = await initCommandLine();
+  const environmentSpecs:string[] = [];
+  const toolkitStackName = undefined;
+  const roleArn = undefined;
+  const useNewBootstrapping = false;
+  const force = true;
+  const sst = true;
+  return await cli.bootstrap(
+    environmentSpecs,
     toolkitStackName,
+    roleArn,
+    useNewBootstrapping,
+    force,
+    { },
+    sst
+  );
+}
+
+/**
+ * List all stacks with dependencies.
+ *
+ * Used by deploy workflow.
+ *
+ * @returns { stacks: [{ id, name, dependencies }] }
+ */
+export async function sstList(outputPath: string) {
+  const { cli } = await initCommandLine();
+  return await cli.list([], {
+    outputPath,
+    long: true,
   });
 }
 
-export async function stDeployStatus(outputPath: string, stackName: string) {
+/**
+ * Synth all stacks, and returns synthesized stacks.
+ *
+ * Used by sst cli.
+ *
+ * @returns { stacks: [{ id, name }] }
+ */
+export async function sstSynth() {
+  const { cli } = await initCommandLine();
+  return await cli.synth([], false, {
+    sst: true,
+  });
+}
+
+/**
+ * Deploy a single stack exclusively or deploy all stacks, and returns deployed stacks.
+ *
+ * Used by sst cli.
+ *
+ * @param stackName the stack to be deploy. All stacks are deployed if not specified.
+ *
+ * @returns { stacks: [{ id, name }] }
+ */
+export async function sstDeploy(stackName?: string) {
+  const { cli, toolkitStackName } = await initCommandLine();
+  return await cli.deploy({
+    stackNames: stackName ? [ stackName ] : [],
+    exclusively: true,
+    requireApproval: RequireApproval.Never,
+    toolkitStackName,
+    sst: true,
+  });
+}
+
+/**
+ * Destroy a single stack exclusively or destroy all stacks, and returns destroyed stacks.
+ *
+ * Used by sst cli.
+ *
+ * @param stackName the stack to be destroyed. All stacks are destroyed if not specified.
+ *
+ * @returns { stacks: [{ id, name }] }
+ */
+export async function sstDestroy(stackName?: string) {
+  const { cli } = await initCommandLine();
+  return await cli.destroy({
+    stackNames: stackName ? [ stackName ] : [],
+    exclusively: true,
+    force: true,
+    sst: true,
+  });
+}
+
+/**
+ * Deploy a single stack asynchronously, and returns the environment deployed to and deploy status.
+ *
+ * Used by deploy workflow.
+ *
+ * @param outputPath the path to cdk.out folder.
+ * @param stackName the stack to be deploy.
+ * @param force always deploy stack even if templates are identical.
+ *
+ * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deploying'  }
+ */
+export async function sstDeployAsync(outputPath: string, stackName: string, force: boolean) {
+  const { cli, toolkitStackName } = await initCommandLine();
+  return await cli.deploy({
+    stackNames: [ stackName ],
+    exclusively: true,
+    requireApproval: RequireApproval.Never,
+    toolkitStackName,
+    force,
+    outputPath,
+    async: true,
+    sst: true,
+  });
+}
+
+/**
+ * Get asynchronous deploy status.
+ *
+ * Used by deploy workflow.
+ *
+ * @param outputPath the path to cdk.out folder.
+ * @param stackName the stack to be deploy.
+ *
+ * @returns { status: 'deploying' | 'deployed'  }
+ */
+export async function sstDeployStatus(outputPath: string, stackName: string) {
   const { cli, toolkitStackName } = await initCommandLine();
 
   return await cli.deployStatus(outputPath, {
@@ -31,16 +152,39 @@ export async function stDeployStatus(outputPath: string, stackName: string) {
   });
 }
 
-export async function stDestroyAsync(outputPath: string, stackName: string) {
-  const { cli, toolkitStackName } = await initCommandLine();
-
-  return await cli.destroyAsync(outputPath, {
+/**
+ * Destroy a single stack asynchronously, and returns destroy status.
+ *
+ * Used by deploy workflow.
+ *
+ * @param outputPath the path to cdk.out folder.
+ * @param stackName the stack to be destroy.
+ *
+ * @returns { account, region, status: 'destroying' | 'destroyed'  }
+ */
+export async function sstDestroyAsync(outputPath: string, stackName: string) {
+  const { cli } = await initCommandLine();
+  return await cli.destroy({
     stackNames: [ stackName ],
-    toolkitStackName,
+    exclusively: true,
+    force: true,
+    outputPath,
+    async: true,
+    sst: true,
   });
 }
 
-export async function stDestroyStatus(outputPath: string, stackName: string) {
+/**
+ * Get asynchronous destroy status.
+ *
+ * Used by deploy workflow.
+ *
+ * @param outputPath the path to cdk.out folder.
+ * @param stackName the stack to be destroyed.
+ *
+ * @returns { status: 'destroying' | 'destroyed'  }
+ */
+export async function sstDestroyStatus(outputPath: string, stackName: string) {
   const { cli, toolkitStackName } = await initCommandLine();
 
   return await cli.destroyStatus(outputPath, {
