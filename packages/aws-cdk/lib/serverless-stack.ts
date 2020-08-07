@@ -7,6 +7,15 @@ import { CdkToolkit } from './cdk-toolkit';
 import { Configuration } from './settings';
 import { RequireApproval } from './diff';
 
+/**
+ * Get default environment.
+ *
+ * Used by sst cli.
+ *
+ * @returns {
+ *    environment: { account, region }
+ *  }
+ */
 export async function sstEnv() {
   const { cli } = await initCommandLine();
   return await cli.env();
