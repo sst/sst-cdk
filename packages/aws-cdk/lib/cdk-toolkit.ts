@@ -325,6 +325,7 @@ export class CdkToolkit {
 
         if (options.sst && options.async) {
           asyncResult = { status: result.status };
+          return;
         }
 
         success(`\n ✅  %s: ${action}ed`, colors.blue(stack.displayName));
