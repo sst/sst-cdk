@@ -129,6 +129,8 @@ export async function sstDestroy(stackName?: string) {
  * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deploying'  }
  */
 export async function sstDeployAsync(outputPath: string, stackName: string, force: boolean) {
+  process.env.ASYNC_INVOCATION = 'true';
+
   const { cli, toolkitStackName } = await initCommandLine();
   return await cli.deploy({
     stackNames: [ stackName ],
@@ -153,8 +155,9 @@ export async function sstDeployAsync(outputPath: string, stackName: string, forc
  * @returns { status: 'deploying' | 'deployed'  }
  */
 export async function sstDeployStatus(outputPath: string, stackName: string) {
-  const { cli, toolkitStackName } = await initCommandLine();
+  process.env.ASYNC_INVOCATION = 'true';
 
+  const { cli, toolkitStackName } = await initCommandLine();
   return await cli.deployStatus(outputPath, {
     stackNames: [ stackName ],
     toolkitStackName,
@@ -172,6 +175,8 @@ export async function sstDeployStatus(outputPath: string, stackName: string) {
  * @returns { account, region, status: 'destroying' | 'destroyed'  }
  */
 export async function sstDestroyAsync(outputPath: string, stackName: string) {
+  process.env.ASYNC_INVOCATION = 'true';
+
   const { cli } = await initCommandLine();
   return await cli.destroy({
     stackNames: [ stackName ],
@@ -194,8 +199,9 @@ export async function sstDestroyAsync(outputPath: string, stackName: string) {
  * @returns { status: 'destroying' | 'destroyed'  }
  */
 export async function sstDestroyStatus(outputPath: string, stackName: string) {
-  const { cli, toolkitStackName } = await initCommandLine();
+  process.env.ASYNC_INVOCATION = 'true';
 
+  const { cli, toolkitStackName } = await initCommandLine();
   return await cli.destroyStatus(outputPath, {
     stackNames: [ stackName ],
     toolkitStackName,
