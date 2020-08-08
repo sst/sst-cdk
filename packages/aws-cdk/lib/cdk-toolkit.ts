@@ -220,6 +220,16 @@ export class CdkToolkit {
           async: options.async,
         });
 
+        if (options.sst && options.async) {
+          const [ ,,, region, account ] = result.stackArn.split(':');
+          asyncResult = {
+            account,
+            region,
+            status: result.noOp ? 'unchanged' : 'deploying',
+          };
+          continue;
+        }
+
         const message = result.noOp
           ? ' ✅  %s (no changes)'
           : ' ✅  %s';
@@ -240,15 +250,6 @@ export class CdkToolkit {
         print('\nStack ARN:');
 
         data(result.stackArn);
-
-        if (options.sst && options.async) {
-          const [ ,,, region, account ] = result.stackArn.split(':');
-          asyncResult = {
-            account,
-            region,
-            status: result.noOp ? 'unchanged' : 'deploying',
-          };
-        }
       } catch (e) {
         error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
         throw e;
@@ -321,11 +322,12 @@ export class CdkToolkit {
           roleArn: options.roleArn,
           async: options.async,
         });
-        success(`\n ✅  %s: ${action}ed`, colors.blue(stack.displayName));
 
         if (options.sst && options.async) {
           asyncResult = { status: result.status };
         }
+
+        success(`\n ✅  %s: ${action}ed`, colors.blue(stack.displayName));
       } catch (e) {
         error(`\n ❌  %s: ${action} failed`, colors.blue(stack.displayName), e);
         throw e;
