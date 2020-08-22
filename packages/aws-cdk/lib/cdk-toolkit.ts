@@ -226,6 +226,7 @@ export class CdkToolkit {
             account,
             region,
             status: result.noOp ? 'unchanged' : 'deploying',
+            resourceCount: result.resourceCount,
           };
           continue;
         }

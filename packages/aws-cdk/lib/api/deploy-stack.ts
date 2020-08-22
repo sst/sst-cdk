@@ -38,6 +38,7 @@ export interface DeployStackResult {
   readonly outputs: { [name: string]: string };
   readonly stackArn: string;
   readonly stackArtifact: cxapi.CloudFormationStackArtifact;
+  readonly resourceCount?: number;
 }
 
 /** @experimental */
@@ -264,7 +265,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
     debug('Initiating execution of changeset %s on stack %s', changeSetName, deployName);
     await cfn.executeChangeSet({StackName: deployName, ChangeSetName: changeSetName}).promise();
     if (options.async) {
-      return { noOp: false, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact };
+      return { noOp: false, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact, resourceCount: (changeSetDescription.Changes ?? []).length };
     }
 
     // eslint-disable-next-line max-len
@@ -402,15 +403,16 @@ export async function destroyStack(options: DestroyStackOptions): Promise<any> {
       ? { status: 'destroyed' }
       : undefined;
   }
+
+  await cfn.deleteStack({ StackName: deployName, RoleARN: options.roleArn }).promise();
+
+  if (options.async) {
+    return { status: 'destroying' };
+  }
+
   const monitor = options.quiet ? undefined : new StackActivityMonitor(cfn, deployName, options.stack).start();
 
   try {
-    await cfn.deleteStack({ StackName: deployName, RoleARN: options.roleArn }).promise();
-
-    if (options.async) {
-      return { status: 'destroying' };
-    }
-
     const destroyedStack = await waitForStackDelete(cfn, deployName);
     if (destroyedStack && destroyedStack.stackStatus.name !== 'DELETE_COMPLETE') {
       throw new Error(`Failed to destroy ${deployName}: ${destroyedStack.stackStatus}`);
