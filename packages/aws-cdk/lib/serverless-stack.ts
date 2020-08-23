@@ -50,6 +50,35 @@ export async function sstBootstrap() {
 }
 
 /**
+ * Bootstrap and returns the boostrapped environment. Only returns 1 environment.
+ *
+ * Used by deploy workflow.
+ *
+ * @returns {
+ *    environment: { account, region }
+ *  }
+ */
+export async function sstWorkflowBootstrap(outputPath: string) {
+  const { cli } = await initCommandLine();
+  const environmentSpecs:string[] = [];
+  const toolkitStackName = undefined;
+  const roleArn = undefined;
+  const useNewBootstrapping = false;
+  const force = true;
+  const sst = true;
+  return await cli.bootstrap(
+    environmentSpecs,
+    toolkitStackName,
+    roleArn,
+    useNewBootstrapping,
+    force,
+    { },
+    sst,
+    outputPath
+  );
+}
+
+/**
  * List all stacks with dependencies.
  *
  * Used by deploy workflow.

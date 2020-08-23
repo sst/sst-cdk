@@ -513,7 +513,7 @@ export class CdkToolkit {
    */
   public async bootstrap(
     environmentSpecs: string[], toolkitStackName: string | undefined, roleArn: string | undefined,
-    useNewBootstrapping: boolean, force: boolean | undefined, props: BootstrappingParameters, sst?: boolean): Promise<any> {
+    useNewBootstrapping: boolean, force: boolean | undefined, props: BootstrappingParameters, sst?: boolean, outputPath?: string): Promise<any> {
     // If there is an '--app' argument and an environment looks like a glob, we
     // select the environments from the app. Otherwise use what the user said.
 
@@ -522,7 +522,7 @@ export class CdkToolkit {
 
     // Partition into globs and non-globs (this will mutate environmentSpecs).
     const globSpecs = partition(environmentSpecs, looksLikeGlob);
-    if (globSpecs.length > 0 && !this.props.cloudExecutable.hasApp) {
+    if (globSpecs.length > 0 && !this.props.cloudExecutable.hasApp && !outputPath) {
       throw new Error(`'${globSpecs}' is not an environment name. Run in app directory to glob or specify an environment name like \'aws://123456789012/us-east-1\'.`);
     }
 
@@ -533,6 +533,14 @@ export class CdkToolkit {
     // If there is an '--app' argument, select the environments from the app.
     if (this.props.cloudExecutable.hasApp) {
       environments.push(...await globEnvironmentsFromStacks(await this.selectStacksForList([]), globSpecs, this.props.sdkProvider));
+    }
+
+    // If this is called from Seed workflow
+    if (outputPath) {
+      const cxapiAssembly = new cxapi.CloudAssembly(outputPath);
+      const assembly = new CloudAssembly(cxapiAssembly);
+      const stacks = await assembly.selectStacks([], { defaultBehavior: DefaultSelection.AllStacks });
+      environments.push(...await globEnvironmentsFromStacks(stacks, globSpecs, this.props.sdkProvider));
     }
 
     await Promise.all(environments.map(async (environment) => {

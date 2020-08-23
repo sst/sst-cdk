@@ -17,7 +17,7 @@ import { data, debug, error, print, setLogLevel } from '../lib/logging';
 import { PluginHost } from '../lib/plugin';
 import { serializeStructure } from '../lib/serialize';
 import { Configuration, Settings } from '../lib/settings';
-import { sstEnv, sstBootstrap, sstList, sstSynth, sstDeploy, sstDestroy, sstDeployAsync, sstDeployStatus, sstDestroyAsync, sstDestroyStatus } from '../lib/serverless-stack';
+import { sstEnv, sstBootstrap, sstWorkflowBootstrap, sstList, sstSynth, sstDeploy, sstDestroy, sstDeployAsync, sstDeployStatus, sstDestroyAsync, sstDestroyStatus } from '../lib/serverless-stack';
 import * as version from '../lib/version';
 
 /* eslint-disable max-len */
@@ -323,6 +323,8 @@ async function initCommandLine() {
         return await sstEnv();
       case 'sst-bootstrap':
         return await sstBootstrap();
+      case 'sst-workflow-bootstrap':
+        return await sstWorkflowBootstrap(args.output);
       case 'sst-synth':
         return await sstSynth();
       case 'sst-deploy':
