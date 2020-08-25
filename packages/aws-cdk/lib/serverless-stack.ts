@@ -1,11 +1,20 @@
+import * as colors from 'colors/safe';
 import { ToolkitInfo } from './api/toolkit-info';
 import { SdkProvider } from './api/aws-auth';
 import { CloudFormationDeployments } from './api/cloudformation-deployments';
 import { CloudExecutable } from './api/cxapp/cloud-executable';
 import { execProgram } from './api/cxapp/exec';
+import { setLogLevel } from './logging';
 import { CdkToolkit } from './cdk-toolkit';
 import { Configuration } from './settings';
 import { RequireApproval } from './diff';
+
+interface CliOption {
+  readonly app?: string;
+  readonly verbose?: number;
+  readonly noColor?: boolean;
+  readonly stackName?: string;
+}
 
 /**
  * Get default environment.
@@ -16,8 +25,8 @@ import { RequireApproval } from './diff';
  *    environment: { account, region }
  *  }
  */
-export async function sstEnv() {
-  const { cli } = await initCommandLine();
+export async function sstEnv(options: CliOption = { }) {
+  const { cli } = await initCommandLine(options);
   return await cli.env();
 }
 
@@ -30,8 +39,8 @@ export async function sstEnv() {
  *    environment: { account, region }
  *  }
  */
-export async function sstBootstrap() {
-  const { cli } = await initCommandLine();
+export async function sstBootstrap(options: CliOption = { }) {
+  const { cli } = await initCommandLine(options);
   const environmentSpecs:string[] = [];
   const toolkitStackName = undefined;
   const roleArn = undefined;
@@ -100,8 +109,8 @@ export async function sstList(outputPath: string) {
  *
  * @returns { stacks: [{ id, name }] }
  */
-export async function sstSynth() {
-  const { cli } = await initCommandLine();
+ export async function sstSynth(options: CliOption = { }) {
+  const { cli } = await initCommandLine(options);
   return await cli.synth([], false, {
     sst: true,
   });
@@ -116,10 +125,10 @@ export async function sstSynth() {
  *
  * @returns { stacks: [{ id, name }] }
  */
-export async function sstDeploy(stackName?: string) {
-  const { cli, toolkitStackName } = await initCommandLine();
+export async function sstDeploy(options: CliOption = { }) {
+  const { cli, toolkitStackName } = await initCommandLine(options);
   return await cli.deploy({
-    stackNames: stackName ? [ stackName ] : [],
+    stackNames: options.stackName ? [ options.stackName ] : [],
     exclusively: true,
     requireApproval: RequireApproval.Never,
     toolkitStackName,
@@ -136,10 +145,10 @@ export async function sstDeploy(stackName?: string) {
  *
  * @returns { stacks: [{ id, name }] }
  */
-export async function sstDestroy(stackName?: string) {
-  const { cli } = await initCommandLine();
+export async function sstDestroy(options: CliOption = { }) {
+  const { cli } = await initCommandLine(options);
   return await cli.destroy({
-    stackNames: stackName ? [ stackName ] : [],
+    stackNames: options.stackName ? [ options.stackName ] : [],
     exclusively: true,
     force: true,
     sst: true,
@@ -237,14 +246,24 @@ export async function sstDestroyStatus(outputPath: string, stackName: string) {
   });
 }
 
-async function initCommandLine() {
-  const configuration = new Configuration();
+async function initCommandLine(options: CliOption = { }) {
+console.log({ options });
+  // set log level
+  if (options.verbose) {
+    setLogLevel(options.verbose);
+  }
+
+  // set no color
+  if (options.noColor) {
+    colors.disable();
+  }
+
+  const configuration = new Configuration({ app: options.app });
   await configuration.load();
 
   const sdkProvider = await SdkProvider.withAwsCliCompatibleDefaults({
     profile: configuration.settings.get(['profile']),
   });
-
 
   const cloudFormation = new CloudFormationDeployments({ sdkProvider });
 
@@ -257,6 +276,7 @@ async function initCommandLine() {
   const cli = new CdkToolkit({
     cloudExecutable,
     cloudFormation,
+    verbose: options.verbose ? options.verbose > 0 : false,
     configuration,
     sdkProvider,
   });

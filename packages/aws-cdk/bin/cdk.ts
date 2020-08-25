@@ -322,15 +322,16 @@ async function initCommandLine() {
       case 'sst-env':
         return await sstEnv();
       case 'sst-bootstrap':
-        return await sstBootstrap();
+        return await sstBootstrap(argv);
+      case 'sst-synth':
+        return await sstSynth(argv);
+      case 'sst-deploy':
+        return await sstDeploy({ ...argv, stackName: args.STACK });
+      case 'sst-destroy':
+        return await sstDestroy({ ...argv, stackName: args.STACK });
+
       case 'sst-workflow-bootstrap':
         return await sstWorkflowBootstrap(args.output);
-      case 'sst-synth':
-        return await sstSynth();
-      case 'sst-deploy':
-        return await sstDeploy(args.STACK);
-      case 'sst-destroy':
-        return await sstDestroy(args.STACK);
       case 'sst-list':
         return await sstList(args.output);
       case 'sst-deploy-async':
