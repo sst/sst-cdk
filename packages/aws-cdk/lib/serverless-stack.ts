@@ -11,6 +11,7 @@ import { RequireApproval } from './diff';
 
 interface CliOption {
   readonly app?: string;
+  readonly output?: string;
   readonly verbose?: number;
   readonly noColor?: boolean;
   readonly stackName?: string;
@@ -56,50 +57,6 @@ export async function sstBootstrap(options: CliOption = { }) {
     { },
     sst
   );
-}
-
-/**
- * Bootstrap and returns the boostrapped environment. Only returns 1 environment.
- *
- * Used by deploy workflow.
- *
- * @returns {
- *    environment: { account, region }
- *  }
- */
-export async function sstWorkflowBootstrap(outputPath: string) {
-  const { cli } = await initCommandLine();
-  const environmentSpecs:string[] = [];
-  const toolkitStackName = undefined;
-  const roleArn = undefined;
-  const useNewBootstrapping = false;
-  const force = true;
-  const sst = true;
-  return await cli.bootstrap(
-    environmentSpecs,
-    toolkitStackName,
-    roleArn,
-    useNewBootstrapping,
-    force,
-    { },
-    sst,
-    outputPath
-  );
-}
-
-/**
- * List all stacks with dependencies.
- *
- * Used by deploy workflow.
- *
- * @returns { stacks: [{ id, name, dependencies }] }
- */
-export async function sstList(outputPath: string) {
-  const { cli } = await initCommandLine();
-  return await cli.list([], {
-    outputPath,
-    sst: true,
-  });
 }
 
 /**
@@ -151,6 +108,50 @@ export async function sstDestroy(options: CliOption = { }) {
     stackNames: options.stackName ? [ options.stackName ] : [],
     exclusively: true,
     force: true,
+    sst: true,
+  });
+}
+
+/**
+ * Bootstrap and returns the boostrapped environment. Only returns 1 environment.
+ *
+ * Used by deploy workflow.
+ *
+ * @returns {
+ *    environment: { account, region }
+ *  }
+ */
+export async function sstWorkflowBootstrap(outputPath: string) {
+  const { cli } = await initCommandLine();
+  const environmentSpecs:string[] = [];
+  const toolkitStackName = undefined;
+  const roleArn = undefined;
+  const useNewBootstrapping = false;
+  const force = true;
+  const sst = true;
+  return await cli.bootstrap(
+    environmentSpecs,
+    toolkitStackName,
+    roleArn,
+    useNewBootstrapping,
+    force,
+    { },
+    sst,
+    outputPath
+  );
+}
+
+/**
+ * List all stacks with dependencies.
+ *
+ * Used by deploy workflow.
+ *
+ * @returns { stacks: [{ id, name, dependencies }] }
+ */
+export async function sstList(outputPath: string) {
+  const { cli } = await initCommandLine();
+  return await cli.list([], {
+    outputPath,
     sst: true,
   });
 }
@@ -247,7 +248,6 @@ export async function sstDestroyStatus(outputPath: string, stackName: string) {
 }
 
 async function initCommandLine(options: CliOption = { }) {
-console.log({ options });
   // set log level
   if (options.verbose) {
     setLogLevel(options.verbose);
@@ -258,7 +258,10 @@ console.log({ options });
     colors.disable();
   }
 
-  const configuration = new Configuration({ app: options.app });
+  const configuration = new Configuration({
+    app: options.app,
+    output: options.output,
+  });
   await configuration.load();
 
   const sdkProvider = await SdkProvider.withAwsCliCompatibleDefaults({

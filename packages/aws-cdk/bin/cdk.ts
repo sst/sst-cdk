@@ -320,7 +320,7 @@ async function initCommandLine() {
         return data(version.DISPLAY_VERSION);
 
       case 'sst-env':
-        return await sstEnv();
+        return await sstEnv(argv);
       case 'sst-bootstrap':
         return await sstBootstrap(argv);
       case 'sst-synth':
