@@ -22,6 +22,8 @@ interface CliOption {
  *
  * Used by sst cli.
  *
+ * @param options CLI options
+ *
  * @returns {
  *    environment: { account, region }
  *  }
@@ -35,6 +37,8 @@ export async function sstEnv(options: CliOption = { }) {
  * Bootstrap and returns the boostrapped environment. Only returns 1 environment.
  *
  * Used by sst cli.
+ *
+ * @param options CLI options
  *
  * @returns {
  *    environment: { account, region }
@@ -64,6 +68,8 @@ export async function sstBootstrap(options: CliOption = { }) {
  *
  * Used by sst cli.
  *
+ * @param options CLI options
+ *
  * @returns { stacks: [{ id, name }] }
  */
  export async function sstSynth(options: CliOption = { }) {
@@ -78,7 +84,10 @@ export async function sstBootstrap(options: CliOption = { }) {
  *
  * Used by sst cli.
  *
- * @param stackName the stack to be deploy. All stacks are deployed if not specified.
+ * @param options CLI options. If stackName is supplied, only the stack will be deployed.
+ * All stacks are deployed if stackName is not specified.
+ *
+ * @param 
  *
  * @returns { stacks: [{ id, name }] }
  */
@@ -98,7 +107,8 @@ export async function sstDeploy(options: CliOption = { }) {
  *
  * Used by sst cli.
  *
- * @param stackName the stack to be destroyed. All stacks are destroyed if not specified.
+ * @param options CLI options. If stackName is supplied, only the stack will be destroyed.
+ * All stacks are destroyed if stackName is not specified.
  *
  * @returns { stacks: [{ id, name }] }
  */
@@ -116,6 +126,8 @@ export async function sstDestroy(options: CliOption = { }) {
  * Bootstrap and returns the boostrapped environment. Only returns 1 environment.
  *
  * Used by deploy workflow.
+ *
+ * @param outputPath the path to cdk.out folder.
  *
  * @returns {
  *    environment: { account, region }
@@ -145,6 +157,8 @@ export async function sstWorkflowBootstrap(outputPath: string) {
  * List all stacks with dependencies.
  *
  * Used by deploy workflow.
+ *
+ * @param outputPath the path to cdk.out folder.
  *
  * @returns { stacks: [{ id, name, dependencies }] }
  */
