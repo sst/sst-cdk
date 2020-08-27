@@ -90,6 +90,13 @@ export interface DeployStackOptions {
   usePreviousParameters?: boolean;
 
   /**
+   * Whether we are on a CI system
+   *
+   * @default false
+   */
+  readonly ci?: boolean;
+
+  /**
    * Start dpeloying and returns right away.
    * @default false
    */
@@ -166,6 +173,7 @@ export class CloudFormationDeployments {
       force: options.force,
       parameters: options.parameters,
       usePreviousParameters: options.usePreviousParameters,
+      ci: options.ci,
       async: options.async,
     });
   }
