@@ -22,5 +22,5 @@ execSync(`git tag v${forkVersion} && git push --tags`);
 execSync(`scripts/align-version.sh`);
 execSync(`cd packages/aws-cdk && sed -i '' "s/\\"name\\": \\"aws-cdk\\"/\\"name\\": \\"@serverless-stack\\/aws-cdk\\"/g" package.json`);
 execSync(`cd packages/aws-cdk && sed -i '' "s/\\"version\\": \\"${cdkVersion}\\"/\\"version\\": \\"${forkVersion}\\"/g" package.json`);
-execSync(`npm publish --access public`);
+execSync(`cd packages/aws-cdk && npm publish --access public`);
 execSync(`git reset --hard`);
