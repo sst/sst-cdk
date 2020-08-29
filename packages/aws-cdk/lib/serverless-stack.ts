@@ -65,6 +65,23 @@ export async function sstBootstrap(options: CliOption = { }) {
 }
 
 /**
+ * List all stacks with dependencies.
+ *
+ * Used by deploy workflow.
+ *
+ * @param outputPath the path to cdk.out folder.
+ *
+ * @returns { stacks: [{ id, name, dependencies }] }
+ */
+export async function sstList(outputPath: string) {
+  const { cli } = await initCommandLine();
+  return await cli.list([], {
+    outputPath,
+    sst: true,
+  });
+}
+
+/**
  * Synth all stacks, and returns synthesized stacks.
  *
  * Used by sst cli.
