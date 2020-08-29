@@ -13,8 +13,8 @@ import { CloudFormationDeployments } from './api/cloudformation-deployments';
 import { CloudAssembly, DefaultSelection, ExtendedStackSelection, StackCollection } from './api/cxapp/cloud-assembly';
 import { CloudExecutable } from './api/cxapp/cloud-executable';
 import { printSecurityDiff, printStackDiff, RequireApproval } from './diff';
-import { data, error, highlight, print, success, warning } from './logging';
-import { deserializeStructure } from './serialize';
+import { data, error, highlight, print, success, warning, debug } from './logging';
+import { serializeStructure, deserializeStructure } from './serialize';
 import { Configuration } from './settings';
 import { partition } from './util';
 
@@ -119,18 +119,14 @@ export class CdkToolkit {
 
   public async deploy(options: DeployOptions): Promise<any> {
     let stacks;
-    if (options.sst && options.async && options.outputPath) {
+    if (options.outputPath) {
       const cxapiAssembly = new cxapi.CloudAssembly(options.outputPath);
       const assembly = new CloudAssembly(cxapiAssembly);
       stacks = await assembly.selectStacks([options.stackNames[0]], {
         extend: ExtendedStackSelection.None,
         defaultBehavior: DefaultSelection.None,
       });
-    }
-    else if (options.sst && options.stackNames.length === 0) {
-      stacks = await this.selectStacksForDeployAll();
-    }
-    else {
+    } else {
       stacks = await this.selectStacksForDeploy(options.stackNames, options.exclusively);
     }
 
@@ -175,7 +171,7 @@ export class CdkToolkit {
             fromDeploy: true,
           });
         }
-        if (options.sst && options.async) {
+        if (options.async) {
           asyncResult = { status: 'no_resources' };
         }
         continue;
@@ -221,13 +217,15 @@ export class CdkToolkit {
           async: options.async,
         });
 
-        if (options.sst && options.async) {
-          const [ ,,, region, account ] = result.stackArn.split(':');
+        if (options.async) {
+          const [,,, region, account] = result.stackArn.split(':');
           asyncResult = {
             account,
             region,
             status: result.noOp ? 'unchanged' : 'deploying',
             resourceCount: result.resourceCount,
+            outputs: result.outputs,
+            stackArn: result.stackArn,
           };
           continue;
         }
@@ -269,19 +267,350 @@ export class CdkToolkit {
       }
     }
 
-    if (options.sst) {
-      if (options.async) {
-        return asyncResult;
-      }
-      else {
-        return {
-          stacks: stacks.stackArtifacts.map(stack => ({
-            id: stack.id,
-            name: stack.stackName,
-          })),
-        };
-      }
+    if (options.async) {
+      return asyncResult;
     }
+  }
+
+  public async parallelDeploy(options: DeployOptions, prevStackStates?: StackState[]): Promise<ProgressState> {
+    const STACK_DEPLOY_STATUS_PENDING = 'pending';
+    const STACK_DEPLOY_STATUS_DEPLOYING = 'deploying';
+    const STACK_DEPLOY_STATUS_SUCCEEDED = 'succeeded';
+    const STACK_DEPLOY_STATUS_UNCHANGED = 'unchanged';
+    const STACK_DEPLOY_STATUS_FAILED = 'failed';
+    const STACK_DEPLOY_STATUS_SKIPPED = 'skipped';
+
+    const getStackArtifacts = async (): Promise<cxapi.CloudFormationStackArtifact[]> => {
+      let stacks;
+
+      // Get stacks from provided cdk.out
+      if (options.outputPath) {
+        const cxapiAssembly = new cxapi.CloudAssembly(options.outputPath);
+        const assembly = new CloudAssembly(cxapiAssembly);
+        stacks = await assembly.selectStacks([], { defaultBehavior: DefaultSelection.AllStacks });
+      }
+      // Get stacks from default cdk.out
+      else {
+        stacks = await this.selectStacksForDeployAll();
+      }
+
+      return stacks.stackArtifacts;
+    };
+
+    const deployStacks = async () => {
+      let hasSucceededStack = false;
+
+      const statusesByStackName: { [key: string]: string } = { };
+      stackStates.forEach(({ name, status }) => {
+        statusesByStackName[name] = status;
+      });
+
+      await Promise.all(
+        stackStates
+          .filter(stackState => stackState.status === STACK_DEPLOY_STATUS_PENDING)
+          .filter(stackState => stackState.dependencies.every(dep => ! [
+            STACK_DEPLOY_STATUS_PENDING,
+            STACK_DEPLOY_STATUS_DEPLOYING,
+          ].includes(statusesByStackName[dep])))
+          .map(async stackState => {
+            try {
+              debug('Deploying stack %s', stackState.name);
+              options.stackNames = [stackState.name];
+              const { status, account, region, resourceCount, outputs, stackArn } = await this.deploy(options);
+              stackState.startedAt = Date.now();
+              stackState.account = account;
+              stackState.region = region;
+              stackState.stackArn = stackArn;
+              stackState.outputs = outputs;
+              stackState.resourceCount = resourceCount;
+              debug('Deploying stack %s status: %s', stackState.name, status);
+
+              if (status === 'unchanged') {
+                stackState.status = STACK_DEPLOY_STATUS_UNCHANGED;
+                stackState.endedAt = stackState.startedAt;
+                hasSucceededStack = true;
+                success(' ✅  %s (no changes)', stackState.name);
+              } else if (status === 'no_resources') {
+                stackState.status = STACK_DEPLOY_STATUS_FAILED;
+                stackState.endedAt = stackState.startedAt;
+                stackState.errorMessage = `The ${stackState.name} stack contains no resources.`;
+                skipUndeployedStacks();
+                error(' ❌  %s failed: %s', colors.bold(stackState.name), stackState.errorMessage);
+              } else if (status === 'deploying') {
+                stackState.status = STACK_DEPLOY_STATUS_DEPLOYING;
+              } else {
+                stackState.status = STACK_DEPLOY_STATUS_FAILED;
+                stackState.endedAt = stackState.startedAt;
+                stackState.errorMessage = `The ${stackState.name} stack failed to deploy.`;
+                skipUndeployedStacks();
+                error(' ❌  %s failed: %s', colors.bold(stackState.name), stackState.errorMessage);
+              }
+
+            } catch (deployEx) {
+              debug('Deploy stack %s exception %s', stackState.name, deployEx);
+              if (isRetryableException(deployEx)) { // retry
+              } else if (isBootstrapException(deployEx)) {
+                try {
+                  debug('Bootstraping stack %s', stackState.name);
+                  const environmentSpecs:string[] = [];
+                  const toolkitStackName = undefined;
+                  const roleArn = undefined;
+                  const useNewBootstrapping = false;
+                  const force = true;
+                  const sst = true;
+                  await this.bootstrap(
+                    environmentSpecs,
+                    toolkitStackName,
+                    roleArn,
+                    useNewBootstrapping,
+                    force,
+                    { },
+                    sst,
+                  );
+                  debug('Bootstraped stack %s', stackState.name);
+                } catch (bootstrapEx) {
+                  debug('Bootstrap stack %s exception %s', stackState.name, bootstrapEx);
+                  if (isRetryableException(bootstrapEx)) { // retry
+                  } else {
+                    stackState.status = STACK_DEPLOY_STATUS_FAILED;
+                    stackState.startedAt = Date.now();
+                    stackState.endedAt = stackState.startedAt;
+                    stackState.errorMessage = bootstrapEx.message;
+                    skipUndeployedStacks();
+                    error(' ❌  %s failed: %s', colors.bold(stackState.name), bootstrapEx);
+                  }
+                }
+
+              } else {
+                stackState.status = STACK_DEPLOY_STATUS_FAILED;
+                stackState.startedAt = Date.now();
+                stackState.endedAt = stackState.startedAt;
+                stackState.errorMessage = deployEx.message;
+                skipUndeployedStacks();
+                error(' ❌  %s failed: %s', colors.bold(stackState.name), deployEx);
+              }
+            }
+          }),
+      );
+
+      if (hasSucceededStack) {
+        debug('At least 1 stack successfully deployed, call deployStacks() again');
+        await deployStacks();
+      }
+    };
+
+    const updateDeployStatuses = async () => {
+      await Promise.all(
+        stackStates
+          .filter(stackState => stackState.status === STACK_DEPLOY_STATUS_DEPLOYING)
+          .map(async stackState => {
+            // Get stack events
+            try {
+              debug('Fetching stack events %s', stackState.name);
+              await getStackEvents(stackState);
+            } catch (e) {
+              debug('%s', e);
+              if (isRetryableException(e)) { // retry
+                return;
+              }
+              // ignore error
+            }
+
+            // Calculate deployed resource count
+            const prevDoneCount = stackState.resourceDoneCount;
+            calculateDeployedResourceCount(stackState);
+            if (stackState.status === STACK_DEPLOY_STATUS_DEPLOYING
+                && stackState.resourceCount
+                && stackState.resourceDoneCount !== prevDoneCount) {
+              print('%s: deploying... %s/%s', stackState.name, stackState.resourceDoneCount, stackState.resourceCount + 1);
+            }
+
+            // Get stack status
+            try {
+              debug('Checking stack status %s', stackState.name);
+              const result = await getDeployStatus(stackState);
+              stackState.stackArn = result.stackArn;
+              stackState.outputs = result.outputs;
+
+              if ( ! result.noOp) {
+                stackState.status = STACK_DEPLOY_STATUS_SUCCEEDED;
+                stackState.endedAt = Date.now();
+                success(' ✅  %s', stackState.name);
+              }
+            } catch (statusEx) {
+              debug('%s', statusEx);
+              if (isRetryableException(statusEx)) { // retry
+              } else {
+                stackState.status = STACK_DEPLOY_STATUS_FAILED;
+                stackState.endedAt = Date.now();
+                stackState.errorMessage = stackState.eventsLatestErrorMessage || statusEx.message;
+                skipUndeployedStacks();
+                error(' ❌  %s failed: %s', colors.bold(stackState.name), stackState.errorMessage);
+              }
+            }
+          }),
+      );
+    };
+
+    const skipUndeployedStacks = () => {
+      stackStates
+        .filter(stackState => stackState.status === STACK_DEPLOY_STATUS_PENDING)
+        .forEach(stackState => { stackState.status = STACK_DEPLOY_STATUS_SKIPPED; });
+    };
+
+    const getDeployStatus = async (stackState: StackState): Promise<any> => {
+      const parameterMap: { [name: string]: { [name: string]: string | undefined } } = { '*': {} };
+      const tags = options.tags;
+      return await this.props.cloudFormation.deployStatus({
+        stack: stackState.stack,
+        deployName: stackState.name,
+        roleArn: options.roleArn,
+        toolkitStackName: options.toolkitStackName,
+        reuseAssets: options.reuseAssets,
+        notificationArns: options.notificationArns,
+        tags,
+        execute: options.execute,
+        force: options.force,
+        parameters: Object.assign({}, parameterMap['*'], parameterMap[stackState.name]),
+        usePreviousParameters: options.usePreviousParameters,
+      });
+    };
+
+    const getStackEvents = async (stackState: StackState) => {
+      // Note: should probably switch to use CDK's built in StackActivity class at some point
+
+      // Stack state props will be modified:
+      // - stackState.events
+      // - stackState.eventsLatestErrorMessage
+      // - stackState.eventsFirstEventAt
+
+      // Get events
+      const stackEvents = await this.props.cloudFormation.describeStackEvents(stackState.stack, stackState.name) || [];
+
+      // look through all the stack events and find the first relevant
+      // event which is a "Stack" event and has a CREATE, UPDATE or DELETE status
+      const firstRelevantEvent = stackEvents.find(event => {
+        const isStack = 'AWS::CloudFormation::Stack';
+        const updateIsInProgress = 'UPDATE_IN_PROGRESS';
+        const createIsInProgress = 'CREATE_IN_PROGRESS';
+        const deleteIsInProgress = 'DELETE_IN_PROGRESS';
+
+        return (
+          event.ResourceType === isStack &&
+          (event.ResourceStatus === updateIsInProgress ||
+            event.ResourceStatus === createIsInProgress ||
+            event.ResourceStatus === deleteIsInProgress)
+        );
+      });
+
+      // set the date some time before the first found
+      // stack event of recently issued stack modification
+      if (firstRelevantEvent) {
+        const eventDate = new Date(firstRelevantEvent.Timestamp);
+        const updatedDate = eventDate.setSeconds(eventDate.getSeconds() - 5);
+        stackState.eventsFirstEventAt = new Date(updatedDate);
+      }
+
+      // Loop through stack events
+      const events = stackState.events || [];
+      stackEvents.reverse().forEach(event => {
+        const eventInRange = stackState.eventsFirstEventAt && stackState.eventsFirstEventAt <= event.Timestamp;
+        const eventNotLogged = events.every(loggedEvent =>
+          loggedEvent.eventId !== event.EventId,
+        );
+        let eventStatus = event.ResourceStatus;
+        if (eventInRange && eventNotLogged) {
+          // Keep track of first failed event
+          if (eventStatus
+            && (eventStatus.endsWith('FAILED') || eventStatus.endsWith('ROLLBACK_IN_PROGRESS'))
+            && ! stackState.eventsLatestErrorMessage) {
+            stackState.eventsLatestErrorMessage = event.ResourceStatusReason;
+          }
+          // Prepare for next monitoring action
+          events.push({
+            eventId: event.EventId,
+            timestamp: event.Timestamp,
+            resourceType: event.ResourceType,
+            resourceStatus: event.ResourceStatus,
+            resourceStatusReason: event.ResourceStatusReason,
+            logicalResourceId: event.LogicalResourceId,
+          });
+        }
+      });
+      stackState.events = events;
+    };
+
+    const calculateDeployedResourceCount = (stackState: StackState) => {
+      let resourceDoneCount = 0;
+      let hasFailedEvents = false;
+      const events = stackState.events || [];
+      events.forEach(({ resourceStatus }) => {
+        if ( ! resourceStatus) { return; }
+
+        if (hasFailedEvents) { return; }
+        if (resourceStatus.endsWith('FAILED')
+          || resourceStatus === 'UPDATE_ROLLBACK_IN_PROGRESS') {
+          hasFailedEvents = true;
+          return;
+        }
+        if (resourceStatus.endsWith('_COMPLETE')) {
+          resourceDoneCount ++;
+        }
+      });
+
+      stackState.resourceDoneCount = resourceDoneCount;
+    };
+
+    const serializeStackStates = () => {
+      return stackStates.map(stackState =>
+        serializeStructure({ ...stackState, stack: undefined }, false)
+      ).join('\n');
+    };
+
+    // Initialize stack states
+    let stackStates: StackState[];
+    // Case: initial call
+    if ( ! prevStackStates) {
+      const stacks = await getStackArtifacts();
+      stackStates = stacks.map(stack => ({
+        stack: stack,
+        name: stack.stackName,
+        status: STACK_DEPLOY_STATUS_PENDING,
+        dependencies: stack.dependencies.map(d => d.id),
+      }));
+    }
+    // Case: subsequent call from sstDeploy
+    // - prevStackStates is passed in; and
+    // - prevStackStates contains 'stack' object
+    else if (prevStackStates && prevStackStates.every(stackState => stackState.stack)) {
+      stackStates = prevStackStates;
+    }
+    // Case: subsequent call from sstDeployAsync
+    // - prevStackStates is passed in; and
+    // - prevStackStates does NOT contain 'stack' object
+    else {
+      const stacks = await getStackArtifacts();
+      stackStates = prevStackStates.map(stackState => {
+        const stack = stacks.find(stack => stack.name === stackState.name);
+        if (stack) {
+          stackState.stack = stack;
+        }
+        return stackState;
+      });
+    }
+
+    debug('Initial stack states: %s', serializeStackStates());
+    await updateDeployStatuses();
+    debug('After update deploy statuses: %s', serializeStackStates());
+    await deployStacks();
+    debug('After deploy stacks: %s', serializeStackStates());
+
+    const isCompleted = stackStates.every(stackState => ! [
+      STACK_DEPLOY_STATUS_PENDING,
+      STACK_DEPLOY_STATUS_DEPLOYING,
+    ].includes(stackState.status));
+
+    return { stackStates, isCompleted };
   }
 
   public async destroy(options: DestroyOptions): Promise<any> {
@@ -293,11 +622,9 @@ export class CdkToolkit {
         extend: ExtendedStackSelection.None,
         defaultBehavior: DefaultSelection.None,
       });
-    }
-    else if (options.sst && options.stackNames.length === 0) {
+    } else if (options.sst && options.stackNames.length === 0) {
       stacks = await this.selectStacksForDestroyAll();
-    }
-    else {
+    } else {
       stacks = await this.selectStacksForDestroy(options.stackNames, options.exclusively);
     }
 
@@ -340,8 +667,7 @@ export class CdkToolkit {
     if (options.sst) {
       if (options.async) {
         return asyncResult;
-      }
-      else {
+      } else {
         return {
           stacks: stacks.stackArtifacts.map(stack => ({
             id: stack.id,
@@ -358,8 +684,7 @@ export class CdkToolkit {
       const cxapiAssembly = new cxapi.CloudAssembly(options.outputPath);
       const assembly = new CloudAssembly(cxapiAssembly);
       stacks = await assembly.selectStacks(selectors, { defaultBehavior: DefaultSelection.AllStacks });
-    }
-    else {
+    } else {
       stacks = await this.selectStacksForList(selectors);
     }
 
@@ -393,45 +718,6 @@ export class CdkToolkit {
     }
 
     return 0; // exit-code
-  }
-
-  public async deployStatus(outputPath: string, options: DeployOptions) {
-    const cxapiAssembly = new cxapi.CloudAssembly(outputPath);
-    const assembly = new CloudAssembly(cxapiAssembly);
-    const stacks = await assembly.selectStacks([options.stackNames[0]], {
-      extend: ExtendedStackSelection.None,
-      defaultBehavior: DefaultSelection.None,
-    });
-    const stack = stacks.firstStack;
-
-    const parameterMap: { [name: string]: { [name: string]: string | undefined } } = {'*': {}};
-    const tags = options.tags;
-
-    print('%s: checking status...', colors.bold(stack.displayName));
-
-    try {
-      const result = await this.props.cloudFormation.deployStatus({
-        stack,
-        deployName: stack.stackName,
-        roleArn: options.roleArn,
-        toolkitStackName: options.toolkitStackName,
-        reuseAssets: options.reuseAssets,
-        notificationArns: options.notificationArns,
-        tags,
-        execute: options.execute,
-        force: options.force,
-        parameters: Object.assign({}, parameterMap['*'], parameterMap[stack.stackName]),
-        usePreviousParameters: options.usePreviousParameters,
-      });
-
-      const status = result.noOp
-        ? 'deploying'
-        : 'deployed';
-      return { status };
-    } catch (e) {
-      error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
-      throw e;
-    }
   }
 
   public async destroyStatus(outputPath: string, options: DeployOptions) {
@@ -892,4 +1178,50 @@ function toCloudFormationTags(tags: cxschema.Tag[]): Tag[] {
 export interface Tag {
   readonly Key: string;
   readonly Value: string;
+}
+
+function isRetryableException(e: { code?: any, message?: string }) {
+  return (e.code === 'ThrottlingException' && e.message === 'Rate exceeded')
+    || (e.code === 'Throttling' && e.message === 'Rate exceeded')
+    || (e.code === 'TooManyRequestsException' && e.message === 'Too Many Requests')
+    || e.code === 'OperationAbortedException'
+    || e.code === 'TimeoutError'
+    || e.code === 'NetworkingError';
+}
+
+function isBootstrapException(e: { message?: string }) {
+  return e.message && e.message.startsWith('This stack uses assets, so the toolkit stack must be deployed to the environment');
+}
+
+export interface ProgressState {
+  isCompleted: boolean;
+  stackStates: StackState[];
+}
+
+export interface StackState {
+  stack: cxapi.CloudFormationStackArtifact;
+  name: string;
+  status: string;
+  dependencies: any[];
+  account?: string;
+  region?: string;
+  startedAt?: number;
+  endedAt?: number;
+  events?: StackEvent[];
+  eventsLatestErrorMessage?: string;
+  eventsFirstEventAt?: Date;
+  resourceCount?: number;
+  resourceDoneCount?: number;
+  errorMessage?: string;
+  stackArn?: string;
+  outputs?: Record<string, string>;
+}
+
+interface StackEvent {
+  eventId: string;
+  timestamp: Date;
+  resourceType?: string;
+  resourceStatus?: string;
+  resourceStatusReason?: string;
+  logicalResourceId?: string;
 }

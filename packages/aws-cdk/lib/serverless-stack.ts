@@ -1,13 +1,14 @@
 import * as colors from 'colors/safe';
-import { ToolkitInfo } from './api/toolkit-info';
 import { SdkProvider } from './api/aws-auth';
 import { CloudFormationDeployments } from './api/cloudformation-deployments';
 import { CloudExecutable } from './api/cxapp/cloud-executable';
 import { execProgram } from './api/cxapp/exec';
-import { setLogLevel } from './logging';
-import { CdkToolkit } from './cdk-toolkit';
-import { Configuration } from './settings';
+import { ToolkitInfo } from './api/toolkit-info';
+import { CdkToolkit, StackState, ProgressState } from './cdk-toolkit';
 import { RequireApproval } from './diff';
+import { setLogLevel, print } from './logging';
+import { Configuration } from './settings';
+//import { RewritableBlock } from './api/util/display';
 
 interface CliOption {
   readonly app?: string;
@@ -59,7 +60,7 @@ export async function sstBootstrap(options: CliOption = { }) {
     useNewBootstrapping,
     force,
     { },
-    sst
+    sst,
   );
 }
 
@@ -72,7 +73,7 @@ export async function sstBootstrap(options: CliOption = { }) {
  *
  * @returns { stacks: [{ id, name }] }
  */
- export async function sstSynth(options: CliOption = { }) {
+export async function sstSynth(options: CliOption = { }) {
   const { cli } = await initCommandLine(options);
   return await cli.synth([], false, {
     sst: true,
@@ -84,22 +85,110 @@ export async function sstBootstrap(options: CliOption = { }) {
  *
  * Used by sst cli.
  *
- * @param options CLI options. If stackName is supplied, only the stack will be deployed.
- * All stacks are deployed if stackName is not specified.
- *
- * @param 
+ * @param options CLI options
  *
  * @returns { stacks: [{ id, name }] }
  */
 export async function sstDeploy(options: CliOption = { }) {
+  process.env.ASYNC_INVOCATION = 'true';
+
+  // create rewritable block
+  //const isWindows = process.platform === 'win32';
+  //const stream = process.stderr;
+  //const fancyOutputAvailable = !isWindows && stream.isTTY && !options.ci;
+  //const block = new RewritableBlock(stream);
+
   const { cli, toolkitStackName } = await initCommandLine(options);
-  return await cli.deploy({
-    stackNames: options.stackName ? [ options.stackName ] : [],
+
+  let stackStates: StackState[] | undefined = undefined;
+  while (true) {
+    const response: ProgressState = await cli.parallelDeploy({
+      stackNames: [],
+      exclusively: true,
+      requireApproval: RequireApproval.Never,
+      toolkitStackName,
+      sst: true,
+      async: true,
+    }, stackStates);
+    stackStates = response.stackStates;
+
+    // Print progress
+    //const printProgress = () => {
+    //  block.displayLines(['!!! CURRENT TIME !!!', colors.cyan(`${Date.now()}`)]);
+    //  stackLogs.push(stacks.length === 1
+    //    ? `INFO: Deploying 1 stack...\n`
+    //    : `INFO: Deploying ${stacks.length} stacks...\n`);
+    //  return stackStates.map(stackState =>
+    //    serializeStructure({ ...stackState, stack: undefined }, false)
+    //  ).join('\n');
+    //}
+
+    if ( response && response.isCompleted) { break; }
+
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+
+  // Print output
+  stackStates.forEach(stackState => {
+    print('\nStack %s', stackState.name);
+    if (stackState.status === 'succeeded') {
+      print('  Status: deployed');
+    }
+    else if (stackState.status === 'unchanged') {
+      print('  Status: no changes');
+    }
+    else if (stackState.status === 'failed') {
+      print('  Status: failed');
+      print('  Error: %s', stackState.errorMessage);
+    }
+    else if (stackState.status === 'skipped') {
+      print('  Status: not deployed');
+    }
+
+    if (stackState.stackArn) {
+      print('  ARN: %s', stackState.stackArn);
+    }
+
+    if (stackState.outputs && Object.keys(stackState.outputs).length > 0) {
+      print('  Outputs:');
+      for (const name of Object.keys(stackState.outputs)) {
+        const value = stackState.outputs[name];
+        print('  - %s: %s', name, value);
+      }
+    }
+  });
+
+  return stackStates && stackStates.map(stackState => ({
+    name: stackState.name,
+    status: stackState.status,
+  }));
+}
+
+/**
+ * Deploy all stacks in parallel asynchronously, and returns the environment deployed to and progress state.
+ *
+ * Used by deploy workflow.
+ *
+ * @param outputPath the path to cdk.out folder.
+ * @param force always deploy stack even if templates are identical.
+ * @param stackStates stackStates from the previous call.
+ *
+ * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deploying'  }
+ */
+export async function sstDeployAsync(outputPath: string, force: boolean, stackStates?: StackState[]) {
+  process.env.ASYNC_INVOCATION = 'true';
+
+  const { cli, toolkitStackName } = await initCommandLine();
+  return await cli.parallelDeploy({
+    stackNames: [],
     exclusively: true,
     requireApproval: RequireApproval.Never,
     toolkitStackName,
+    force,
     sst: true,
-  });
+    async: true,
+    outputPath,
+  }, stackStates);
 }
 
 /**
@@ -107,113 +196,17 @@ export async function sstDeploy(options: CliOption = { }) {
  *
  * Used by sst cli.
  *
- * @param options CLI options. If stackName is supplied, only the stack will be destroyed.
- * All stacks are destroyed if stackName is not specified.
+ * @param options CLI options
  *
  * @returns { stacks: [{ id, name }] }
  */
 export async function sstDestroy(options: CliOption = { }) {
   const { cli } = await initCommandLine(options);
   return await cli.destroy({
-    stackNames: options.stackName ? [ options.stackName ] : [],
+    stackNames: options.stackName ? [options.stackName] : [],
     exclusively: true,
     force: true,
     sst: true,
-  });
-}
-
-/**
- * Bootstrap and returns the boostrapped environment. Only returns 1 environment.
- *
- * Used by deploy workflow.
- *
- * @param outputPath the path to cdk.out folder.
- *
- * @returns {
- *    environment: { account, region }
- *  }
- */
-export async function sstWorkflowBootstrap(outputPath: string) {
-  const { cli } = await initCommandLine();
-  const environmentSpecs:string[] = [];
-  const toolkitStackName = undefined;
-  const roleArn = undefined;
-  const useNewBootstrapping = false;
-  const force = true;
-  const sst = true;
-  return await cli.bootstrap(
-    environmentSpecs,
-    toolkitStackName,
-    roleArn,
-    useNewBootstrapping,
-    force,
-    { },
-    sst,
-    outputPath
-  );
-}
-
-/**
- * List all stacks with dependencies.
- *
- * Used by deploy workflow.
- *
- * @param outputPath the path to cdk.out folder.
- *
- * @returns { stacks: [{ id, name, dependencies }] }
- */
-export async function sstList(outputPath: string) {
-  const { cli } = await initCommandLine();
-  return await cli.list([], {
-    outputPath,
-    sst: true,
-  });
-}
-
-/**
- * Deploy a single stack asynchronously, and returns the environment deployed to and deploy status.
- *
- * Used by deploy workflow.
- *
- * @param outputPath the path to cdk.out folder.
- * @param stackName the stack to be deploy.
- * @param force always deploy stack even if templates are identical.
- *
- * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deploying'  }
- */
-export async function sstDeployAsync(outputPath: string, stackName: string, force: boolean) {
-  process.env.ASYNC_INVOCATION = 'true';
-
-  const { cli, toolkitStackName } = await initCommandLine();
-  return await cli.deploy({
-    stackNames: [ stackName ],
-    exclusively: true,
-    requireApproval: RequireApproval.Never,
-    toolkitStackName,
-    force,
-    outputPath,
-    async: true,
-    sst: true,
-  });
-}
-
-/**
- * Get asynchronous deploy status.
- *
- * Used by deploy workflow.
- *
- * @param outputPath the path to cdk.out folder.
- * @param stackName the stack to be deploy.
- *
- * @returns { status: 'deploying' | 'deployed'  }
- */
-export async function sstDeployStatus(outputPath: string, stackName: string) {
-  process.env.ASYNC_INVOCATION = 'true';
-
-  const { cli, toolkitStackName } = await initCommandLine();
-  return await cli.deployStatus(outputPath, {
-    stackNames: [ stackName ],
-    toolkitStackName,
   });
 }
 
@@ -232,7 +225,7 @@ export async function sstDestroyAsync(outputPath: string, stackName: string) {
 
   const { cli } = await initCommandLine();
   return await cli.destroy({
-    stackNames: [ stackName ],
+    stackNames: [stackName],
     exclusively: true,
     force: true,
     outputPath,
@@ -256,7 +249,7 @@ export async function sstDestroyStatus(outputPath: string, stackName: string) {
 
   const { cli, toolkitStackName } = await initCommandLine();
   return await cli.destroyStatus(outputPath, {
-    stackNames: [ stackName ],
+    stackNames: [stackName],
     toolkitStackName,
   });
 }

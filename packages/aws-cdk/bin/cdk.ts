@@ -16,8 +16,8 @@ import { availableInitLanguages, cliInit, printAvailableTemplates } from '../lib
 import { data, debug, error, print, setLogLevel } from '../lib/logging';
 import { PluginHost } from '../lib/plugin';
 import { serializeStructure } from '../lib/serialize';
+import { sstEnv, sstBootstrap, sstSynth, sstDeploy, sstDeployAsync, sstDestroy, sstDestroyAsync, sstDestroyStatus } from '../lib/serverless-stack';
 import { Configuration, Settings } from '../lib/settings';
-import { sstEnv, sstBootstrap, sstWorkflowBootstrap, sstList, sstSynth, sstDeploy, sstDestroy, sstDeployAsync, sstDeployStatus, sstDestroyAsync, sstDestroyStatus } from '../lib/serverless-stack';
 import * as version from '../lib/version';
 
 /* eslint-disable max-len */
@@ -111,12 +111,12 @@ async function parseCommandLineArguments() {
     .command('sst-list', '')
     .command('sst-bootstrap', '')
     .command('sst-synth', '')
-    .command('sst-deploy [STACK]', '')
-    .command('sst-destroy [STACK]', '')
-    .command('sst-deploy-async [STACK]', '', yargs => yargs
+    .command('sst-deploy', '')
+    .command('sst-deploy-async', '', yargs => yargs
+      .option('output-path', { type: 'string', desc: 'Directory of synthesized cloud assembly', requiresArg: true })
       .option('force', { alias: 'f', type: 'boolean', desc: 'Always deploy stack even if templates are identical', default: false }),
     )
-    .command('sst-deploy-status [STACK]', '')
+    .command('sst-destroy [STACK]', '')
     .command('sst-destroy-async [STACK]', '')
     .command('sst-destroy-status [STACK]', '')
     .commandDir('../lib/commands', { exclude: /^_.*/ })
@@ -326,19 +326,14 @@ async function initCommandLine() {
         return await sstBootstrap(argv);
       case 'sst-synth':
         return await sstSynth(argv);
-      case 'sst-deploy':
-        return await sstDeploy({ ...argv, stackName: args.STACK });
-      case 'sst-destroy':
-        return await sstDestroy({ ...argv, stackName: args.STACK });
 
-      case 'sst-workflow-bootstrap':
-        return await sstWorkflowBootstrap(args.output);
-      case 'sst-list':
-        return await sstList(args.output);
+      case 'sst-deploy':
+        return await sstDeploy({ ...argv });
       case 'sst-deploy-async':
-        return await sstDeployAsync(args.output, args.STACK, args.force);
-      case 'sst-deploy-status':
-        return await sstDeployStatus(args.output, args.STACK);
+        return await sstDeployAsync(args.outputPath, args.force);
+
+      case 'sst-destroy':
+        return await sstDestroy({ ...argv });
       case 'sst-destroy-async':
         return await sstDestroyAsync(args.output, args.STACK);
       case 'sst-destroy-status':

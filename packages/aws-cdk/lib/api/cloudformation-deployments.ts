@@ -233,6 +233,13 @@ export class CloudFormationDeployments {
     return stack.exists;
   }
 
+  public async describeStackEvents(stack: cxapi.CloudFormationStackArtifact, stackName: string) {
+    const { stackSdk } = await this.prepareSdkFor(stack, undefined, Mode.ForReading);
+    const cfn = stackSdk.cloudFormation();
+    const response = await cfn.describeStackEvents({ StackName: stackName }).promise();
+    return response.StackEvents;
+  }
+
   /**
    * Get the environment necessary for touching the given stack
    *

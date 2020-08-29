@@ -273,7 +273,13 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
     await cfn.executeChangeSet({ StackName: deployName, ChangeSetName: changeSetName }).promise();
 
     if (options.async) {
-      return { noOp: false, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact, resourceCount: (changeSetDescription.Changes ?? []).length };
+      return {
+        noOp: false,
+        outputs: cloudFormationStack.outputs,
+        stackArn: changeSet.StackId!,
+        stackArtifact,
+        resourceCount: (changeSetDescription.Changes ?? []).length,
+      };
     }
 
     // eslint-disable-next-line max-len
@@ -315,11 +321,9 @@ export async function deployStatus(options: DeployStackOptions): Promise<DeployS
       stackArn: cloudFormationStack.stackId,
       stackArtifact,
     };
-  }
-  else if (status.isCreationFailure) {
+  } else if (status.isCreationFailure) {
     throw new Error(`The stack named ${deployName} failed creation, it may need to be manually deleted from the AWS console: ${status}`);
-  }
-  else if ( ! status.isDeploySuccess) {
+  } else if ( ! status.isDeploySuccess) {
     throw new Error(`The stack named ${deployName} failed to deploy: ${status}`);
   }
 
@@ -443,11 +447,9 @@ export async function destroyStatus(options: DestroyStackOptions) {
   const status = currentStack.stackStatus;
   if (status.isInProgress) {
     return { status: 'destroying' };
-  }
-  else if (status.isDeleted) {
+  } else if (status.isDeleted) {
     return { status: 'destroyed' };
-  }
-  else if (status.name === 'DELETE_COMPLETE') {
+  } else if (status.name === 'DELETE_COMPLETE') {
     return { status: 'destroyed' };
   }
 
