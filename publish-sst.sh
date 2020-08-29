@@ -1,21 +1,26 @@
-#!/bin/bash
+#!/usr/bin/env node
 
-if [ "$#" -ne 1 ]; then
-    echo "Usage: ./publish-sst.sh REVISION_NUMBER"
-    exit 0
-fi
+const { execSync } = require('child_process');
+const { readFileSync } = require('fs');
 
-revision=$1
-version=$(node -p "JSON.parse(fs.readFileSync('lerna.json')).version");
+// Generate new version
+const cdkVersion = JSON.parse(readFileSync('lerna.json')).version;
 
-# Tag
-git tag v$version-rc.$revision && git push --tags
+const prevForkVersion = execSync('npm show @serverless-stack/aws-cdk version').toString().trim();
+const prevCdkVersion = prevForkVersion.split('-')[0];
+const prevRevision = prevForkVersion.split('.').pop();
+const revision = prevCdkVersion === cdkVersion
+  ? parseInt(prevRevision) + 1
+  : 1;
 
-# Publish
-scripts/align-version.sh
-cd packages/aws-cdk
-sed -i '' "s/\"name\": \"aws-cdk\"/\"name\": \"@serverless-stack\/aws-cdk\"/g" package.json
-sed -i '' "s/\"version\": \"$version\"/\"version\": \"$version-rc.$revision\"/g" package.json
-npm publish --access public
-cd ../..
-git reset --hard
+const forkVersion = `${cdkVersion}-rc.${revision}`;
+
+// Tag
+execSync(`git tag v${forkVersion} && git push --tags`);
+
+// Publish
+execSync(`scripts/align-version.sh`);
+execSync(`cd packages/aws-cdk && sed -i '' "s/\\"name\\": \\"aws-cdk\\"/\\"name\\": \\"@serverless-stack\\/aws-cdk\\"/g" package.json`);
+execSync(`cd packages/aws-cdk && sed -i '' "s/\\"version\\": \\"${cdkVersion}\\"/\\"version\\": \\"${forkVersion}\\"/g" package.json`);
+execSync(`npm publish --access public`);
+execSync(`git reset --hard`);
