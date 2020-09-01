@@ -6,7 +6,7 @@ const { readFileSync } = require('fs');
 // Generate new version
 const cdkVersion = JSON.parse(readFileSync('lerna.json')).version;
 
-const prevForkVersion = execSync('npm show @serverless-stack/aws-cdk version').toString().trim();
+const prevForkVersion = execSync('npm show sst-cdk version').toString().trim();
 const prevCdkVersion = prevForkVersion.split('-')[0];
 const prevRevision = prevForkVersion.split('.').pop();
 const revision = prevCdkVersion === cdkVersion
@@ -20,7 +20,7 @@ execSync(`git tag v${forkVersion} && git push --tags`);
 
 // Publish
 execSync(`scripts/align-version.sh`);
-execSync(`cd packages/aws-cdk && sed -i '' "s/\\"name\\": \\"aws-cdk\\"/\\"name\\": \\"@serverless-stack\\/aws-cdk\\"/g" package.json`);
+execSync(`cd packages/aws-cdk && sed -i '' "s/\\"name\\": \\"aws-cdk\\"/\\"name\\": \\"sst-cdk\\"/g" package.json`);
 execSync(`cd packages/aws-cdk && sed -i '' "s/\\"version\\": \\"${cdkVersion}\\"/\\"version\\": \\"${forkVersion}\\"/g" package.json`);
 execSync(`cd packages/aws-cdk && npm publish --access public`);
 execSync(`git reset --hard`);

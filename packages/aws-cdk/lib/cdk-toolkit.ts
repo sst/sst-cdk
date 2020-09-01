@@ -549,7 +549,7 @@ export class CdkToolkit {
 
         if (hasFailedEvents) { return; }
         if (resourceStatus.endsWith('FAILED')
-          || resourceStatus === 'UPDATE_ROLLBACK_IN_PROGRESS') {
+          || resourceStatus.endsWith('ROLLBACK_IN_PROGRESS')) {
           hasFailedEvents = true;
           return;
         }
