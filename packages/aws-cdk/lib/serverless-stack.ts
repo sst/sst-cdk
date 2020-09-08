@@ -195,7 +195,7 @@ export async function sstDeploy(options: CliOption = { }) {
 export async function sstDeployAsync(outputPath: string, force: boolean, stackStates?: StackState[]) {
   process.env.ASYNC_INVOCATION = 'true';
 
-  const { cli, toolkitStackName } = await initCommandLine();
+  const { cli, toolkitStackName } = await initCommandLine({ verbose: 4 });
   return await cli.parallelDeploy({
     stackNames: [],
     exclusively: true,
