@@ -8,6 +8,7 @@ if ( ! package || ! [ 'sst-cdk', 'test-cdk' ].includes(package)) {
   console.log('Usages:');
   console.log('  ./publish-sst.sh sst-cdk');
   console.log('  ./publish-sst.sh test-cdk');
+  return;
 }
 
 // Generate new version
