@@ -69,15 +69,15 @@ export async function sstBootstrap(options: CliOption = { }) {
  *
  * Used by deploy workflow.
  *
- * @param outputPath the path to cdk.out folder.
+ * @param sstCdkOutputPath the path to cdk.out folder.
  *
  * @returns { stacks: [{ id, name, dependencies }] }
  */
-export async function sstList(outputPath: string) {
+export async function sstList(sstCdkOutputPath: string) {
   const { cli } = await initCommandLine();
   return await cli.list([], {
-    outputPath,
     sst: true,
+    sstCdkOutputPath,
   });
 }
 
@@ -125,7 +125,8 @@ export async function sstDeploy(options: CliOption = { }) {
       requireApproval: RequireApproval.Never,
       toolkitStackName,
       sst: true,
-      async: true,
+      sstAsyncDeploy: true,
+      sstSkipChangeset: true,
     }, stackStates);
     stackStates = response.stackStates;
 
@@ -162,10 +163,6 @@ export async function sstDeploy(options: CliOption = { }) {
       print('  Status: not deployed');
     }
 
-    if (stackState.stackArn) {
-      print('  ARN: %s', stackState.stackArn);
-    }
-
     if (stackState.outputs && Object.keys(stackState.outputs).length > 0) {
       print('  Outputs:');
       for (const name of Object.keys(stackState.outputs)) {
@@ -186,13 +183,13 @@ export async function sstDeploy(options: CliOption = { }) {
  *
  * Used by deploy workflow.
  *
- * @param outputPath the path to cdk.out folder.
+ * @param sstCdkOutputPath the path to cdk.out folder.
  * @param force always deploy stack even if templates are identical.
  * @param stackStates stackStates from the previous call.
  *
  * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deploying'  }
  */
-export async function sstDeployAsync(outputPath: string, force: boolean, stackStates?: StackState[]) {
+export async function sstDeployAsync(sstCdkOutputPath: string, force: boolean, stackStates?: StackState[]) {
   process.env.ASYNC_INVOCATION = 'true';
 
   const { cli, toolkitStackName } = await initCommandLine({ verbose: 4 });
@@ -203,8 +200,9 @@ export async function sstDeployAsync(outputPath: string, force: boolean, stackSt
     toolkitStackName,
     force,
     sst: true,
-    async: true,
-    outputPath,
+    sstCdkOutputPath,
+    sstAsyncDeploy: true,
+    sstSkipChangeset: true,
   }, stackStates);
 }
 
@@ -232,12 +230,12 @@ export async function sstDestroy(options: CliOption = { }) {
  *
  * Used by deploy workflow.
  *
- * @param outputPath the path to cdk.out folder.
+ * @param sstCdkOutputPath the path to cdk.out folder.
  * @param stackName the stack to be destroy.
  *
  * @returns { account, region, status: 'destroying' | 'destroyed'  }
  */
-export async function sstDestroyAsync(outputPath: string, stackName: string) {
+export async function sstDestroyAsync(sstCdkOutputPath: string, stackName: string) {
   process.env.ASYNC_INVOCATION = 'true';
 
   const { cli } = await initCommandLine();
@@ -245,9 +243,9 @@ export async function sstDestroyAsync(outputPath: string, stackName: string) {
     stackNames: [stackName],
     exclusively: true,
     force: true,
-    outputPath,
-    async: true,
     sst: true,
+    sstCdkOutputPath,
+    sstAsyncDestroy: true,
   });
 }
 
@@ -256,16 +254,16 @@ export async function sstDestroyAsync(outputPath: string, stackName: string) {
  *
  * Used by deploy workflow.
  *
- * @param outputPath the path to cdk.out folder.
+ * @param sstCdkOutputPath the path to cdk.out folder.
  * @param stackName the stack to be destroyed.
  *
  * @returns { status: 'destroying' | 'destroyed'  }
  */
-export async function sstDestroyStatus(outputPath: string, stackName: string) {
+export async function sstDestroyStatus(sstCdkOutputPath: string, stackName: string) {
   process.env.ASYNC_INVOCATION = 'true';
 
   const { cli, toolkitStackName } = await initCommandLine();
-  return await cli.destroyStatus(outputPath, {
+  return await cli.destroyStatus(sstCdkOutputPath, {
     stackNames: [stackName],
     toolkitStackName,
   });

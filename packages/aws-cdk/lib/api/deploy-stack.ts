@@ -36,9 +36,8 @@ type TemplateBodyParameter = {
 export interface DeployStackResult {
   readonly noOp: boolean;
   readonly outputs: { [name: string]: string };
-  readonly stackArn: string;
+  readonly stackArn?: string;
   readonly stackArtifact: cxapi.CloudFormationStackArtifact;
-  readonly resourceCount?: number;
 }
 
 /** @experimental */
@@ -168,10 +167,16 @@ export interface DeployStackOptions {
   readonly ci?: boolean;
 
   /**
-   * Start dpeloying and returns right away.
+   * Start deploying and returns right away.
    * @default false
    */
-  async?: boolean;
+  sstAsyncDeploy?: boolean;
+
+  /**
+   * Start deploy without generating and applying changeset.
+   * @default false
+   */
+  sstSkipChangeset?: boolean;
 }
 
 const LARGE_TEMPLATE_SIZE_KB = 50;
@@ -231,24 +236,28 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
 
   const changeSetName = `CDK-${executionId}`;
   const update = cloudFormationStack.exists && cloudFormationStack.stackStatus.name !== 'REVIEW_IN_PROGRESS';
+  let changeSet;
+  let changeSetDescription;
 
-  debug(`Attempting to create ChangeSet ${changeSetName} to ${update ? 'update' : 'create'} stack ${deployName}`);
-  print('%s: creating CloudFormation changeset...', colors.bold(deployName));
-  const changeSet = await cfn.createChangeSet({
-    StackName: deployName,
-    ChangeSetName: changeSetName,
-    ChangeSetType: update ? 'UPDATE' : 'CREATE',
-    Description: `CDK Changeset for execution ${executionId}`,
-    TemplateBody: bodyParameter.TemplateBody,
-    TemplateURL: bodyParameter.TemplateURL,
-    Parameters: stackParams.apiParameters,
-    RoleARN: options.roleArn,
-    NotificationARNs: options.notificationArns,
-    Capabilities: ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'],
-    Tags: options.tags,
-  }).promise();
-  debug('Initiated creation of changeset: %s; waiting for it to finish creating...', changeSet.Id);
-  const changeSetDescription = await waitForChangeSet(cfn, deployName, changeSetName);
+  if (!options.sstSkipChangeset) {
+    debug(`Attempting to create ChangeSet ${changeSetName} to ${update ? 'update' : 'create'} stack ${deployName}`);
+    print('%s: creating CloudFormation changeset...', colors.bold(deployName));
+    changeSet = await cfn.createChangeSet({
+      StackName: deployName,
+      ChangeSetName: changeSetName,
+      ChangeSetType: update ? 'UPDATE' : 'CREATE',
+      Description: `CDK Changeset for execution ${executionId}`,
+      TemplateBody: bodyParameter.TemplateBody,
+      TemplateURL: bodyParameter.TemplateURL,
+      Parameters: stackParams.apiParameters,
+      RoleARN: options.roleArn,
+      NotificationARNs: options.notificationArns,
+      Capabilities: ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'],
+      Tags: options.tags,
+    }).promise();
+    debug('Initiated creation of changeset: %s; waiting for it to finish creating...', changeSet.Id);
+    changeSetDescription = await waitForChangeSet(cfn, deployName, changeSetName);
+  }
 
   // Update termination protection only if it has changed.
   const terminationProtection = stackArtifact.terminationProtection ?? false;
@@ -261,7 +270,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
     debug('Termination protection updated to %s for stack %s', terminationProtection, deployName);
   }
 
-  if (changeSetHasNoChanges(changeSetDescription)) {
+  if (!options.sstSkipChangeset && changeSet && changeSetDescription && changeSetHasNoChanges(changeSetDescription)) {
     debug('No changes are to be performed on %s.', deployName);
     await cfn.deleteChangeSet({ StackName: deployName, ChangeSetName: changeSetName }).promise();
     return { noOp: true, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact };
@@ -269,24 +278,50 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
 
   const execute = options.execute === undefined ? true : options.execute;
   if (execute) {
-    debug('Initiating execution of changeset %s on stack %s', changeSetName, deployName);
-    await cfn.executeChangeSet({ StackName: deployName, ChangeSetName: changeSetName }).promise();
+    if (!options.sstSkipChangeset) {
+      debug('Initiating execution of changeset %s on stack %s', changeSetName, deployName);
+      await cfn.executeChangeSet({ StackName: deployName, ChangeSetName: changeSetName }).promise();
+    }
+    else {
+      debug('Initiating deployment of stack %s', deployName);
+      update
+        ? await cfn.updateStack({
+            StackName: deployName,
+            TemplateBody: bodyParameter.TemplateBody,
+            TemplateURL: bodyParameter.TemplateURL,
+            Parameters: stackParams.apiParameters,
+            RoleARN: options.roleArn,
+            NotificationARNs: options.notificationArns,
+            Capabilities: ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'],
+            Tags: options.tags,
+          }).promise()
+        : await cfn.createStack({
+            StackName: deployName,
+            TemplateBody: bodyParameter.TemplateBody,
+            TemplateURL: bodyParameter.TemplateURL,
+            Parameters: stackParams.apiParameters,
+            RoleARN: options.roleArn,
+            NotificationARNs: options.notificationArns,
+            Capabilities: ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'],
+            Tags: options.tags,
+          }).promise();
+    }
 
-    if (options.async) {
+    if (options.sstAsyncDeploy) {
       return {
         noOp: false,
         outputs: cloudFormationStack.outputs,
-        stackArn: changeSet.StackId!,
         stackArtifact,
-        resourceCount: (changeSetDescription.Changes ?? []).length,
       };
     }
 
     // eslint-disable-next-line max-len
-    const monitor = options.quiet ? undefined : StackActivityMonitor.withDefaultPrinter(cfn, deployName, stackArtifact, {
-      resourcesTotal: (changeSetDescription.Changes ?? []).length,
-      changeSetCreationTime: changeSetDescription.CreationTime,
-    }).start();
+    const monitor = options.quiet || ! changeSetDescription
+      ? undefined
+      : StackActivityMonitor.withDefaultPrinter(cfn, deployName, stackArtifact, {
+        resourcesTotal: (changeSetDescription.Changes ?? []).length,
+        changeSetCreationTime: changeSetDescription.CreationTime,
+      }).start();
     debug('Execution of changeset %s on stack %s has started; waiting for the update to complete...', changeSetName, deployName);
     try {
       const finalStack = await waitForStackDeploy(cfn, deployName);
@@ -302,7 +337,9 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
     print('Changeset %s created and waiting in review for manual execution (--no-execute)', changeSetName);
   }
 
-  return { noOp: false, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact };
+  return changeSet
+    ? { noOp: false, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact }
+    : { noOp: false, outputs: cloudFormationStack.outputs, stackArtifact };
 }
 
 /** @experimental */
@@ -402,7 +439,7 @@ export interface DestroyStackOptions {
   roleArn?: string;
   deployName?: string;
   quiet?: boolean;
-  async?: boolean;
+  sstAsyncDestroy?: boolean;
 }
 
 /** @experimental */
@@ -412,14 +449,14 @@ export async function destroyStack(options: DestroyStackOptions): Promise<any> {
 
   const currentStack = await CloudFormationStack.lookup(cfn, deployName);
   if (!currentStack.exists) {
-    return options.async
+    return options.sstAsyncDestroy
       ? { status: 'destroyed' }
       : undefined;
   }
 
   await cfn.deleteStack({ StackName: deployName, RoleARN: options.roleArn }).promise();
 
-  if (options.async) {
+  if (options.sstAsyncDestroy) {
     return { status: 'destroying' };
   }
   const monitor = options.quiet ? undefined : StackActivityMonitor.withDefaultPrinter(cfn, deployName, options.stack).start();

@@ -119,8 +119,8 @@ export class CdkToolkit {
 
   public async deploy(options: DeployOptions): Promise<any> {
     let stacks;
-    if (options.outputPath) {
-      const cxapiAssembly = new cxapi.CloudAssembly(options.outputPath);
+    if (options.sstCdkOutputPath) {
+      const cxapiAssembly = new cxapi.CloudAssembly(options.sstCdkOutputPath);
       const assembly = new CloudAssembly(cxapiAssembly);
       stacks = await assembly.selectStacks([options.stackNames[0]], {
         extend: ExtendedStackSelection.None,
@@ -171,7 +171,7 @@ export class CdkToolkit {
             fromDeploy: true,
           });
         }
-        if (options.async) {
+        if (options.sstAsyncDeploy) {
           asyncResult = { status: 'no_resources' };
         }
         continue;
@@ -214,18 +214,16 @@ export class CdkToolkit {
           parameters: Object.assign({}, parameterMap['*'], parameterMap[stack.stackName]),
           usePreviousParameters: options.usePreviousParameters,
           ci: options.ci,
-          async: options.async,
+          sstAsyncDeploy: options.sstAsyncDeploy,
+          sstSkipChangeset: options.sstSkipChangeset,
         });
 
-        if (options.async) {
-          const [,,, region, account] = result.stackArn.split(':');
+        if (options.sstAsyncDeploy) {
           asyncResult = {
-            account,
-            region,
+            account: (await this.props.sdkProvider.defaultAccount())?.accountId,
+            region: this.props.sdkProvider.defaultRegion,
             status: result.noOp ? 'unchanged' : 'deploying',
-            resourceCount: result.resourceCount,
             outputs: result.outputs,
-            stackArn: result.stackArn,
           };
           continue;
         }
@@ -249,7 +247,7 @@ export class CdkToolkit {
 
         print('\nStack ARN:');
 
-        data(result.stackArn);
+        data(result.stackArn ?? 'Changeset not generated');
       } catch (e) {
         error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
         throw e;
@@ -267,7 +265,7 @@ export class CdkToolkit {
       }
     }
 
-    if (options.async) {
+    if (options.sstAsyncDeploy) {
       return asyncResult;
     }
   }
@@ -284,8 +282,8 @@ export class CdkToolkit {
       let stacks;
 
       // Get stacks from provided cdk.out
-      if (options.outputPath) {
-        const cxapiAssembly = new cxapi.CloudAssembly(options.outputPath);
+      if (options.sstCdkOutputPath) {
+        const cxapiAssembly = new cxapi.CloudAssembly(options.sstCdkOutputPath);
         const assembly = new CloudAssembly(cxapiAssembly);
         stacks = await assembly.selectStacks([], { defaultBehavior: DefaultSelection.AllStacks });
       }
@@ -316,13 +314,11 @@ export class CdkToolkit {
             try {
               debug('Deploying stack %s', stackState.name);
               options.stackNames = [stackState.name];
-              const { status, account, region, resourceCount, outputs, stackArn } = await this.deploy(options);
+              const { status, account, region, outputs } = await this.deploy(options);
               stackState.startedAt = Date.now();
               stackState.account = account;
               stackState.region = region;
-              stackState.stackArn = stackArn;
               stackState.outputs = outputs;
-              stackState.resourceCount = resourceCount;
               debug('Deploying stack %s status: %s', stackState.name, status);
 
               if (status === 'unchanged') {
@@ -416,20 +412,10 @@ export class CdkToolkit {
               // ignore error
             }
 
-            // Calculate deployed resource count
-            const prevDoneCount = stackState.resourceDoneCount;
-            calculateDeployedResourceCount(stackState);
-            if (stackState.status === STACK_DEPLOY_STATUS_DEPLOYING
-                && stackState.resourceCount
-                && stackState.resourceDoneCount !== prevDoneCount) {
-              print('%s: deploying... %s/%s', stackState.name, stackState.resourceDoneCount, stackState.resourceCount + 1);
-            }
-
             // Get stack status
             try {
               debug('Checking stack status %s', stackState.name);
               const result = await getDeployStatus(stackState);
-              stackState.stackArn = result.stackArn;
               stackState.outputs = result.outputs;
 
               if ( ! result.noOp) {
@@ -540,27 +526,6 @@ export class CdkToolkit {
       stackState.events = events;
     };
 
-    const calculateDeployedResourceCount = (stackState: StackState) => {
-      let resourceDoneCount = 0;
-      let hasFailedEvents = false;
-      const events = stackState.events || [];
-      events.forEach(({ resourceStatus }) => {
-        if ( ! resourceStatus) { return; }
-
-        if (hasFailedEvents) { return; }
-        if (resourceStatus.endsWith('FAILED')
-          || resourceStatus.endsWith('ROLLBACK_IN_PROGRESS')) {
-          hasFailedEvents = true;
-          return;
-        }
-        if (resourceStatus.endsWith('_COMPLETE')) {
-          resourceDoneCount ++;
-        }
-      });
-
-      stackState.resourceDoneCount = resourceDoneCount;
-    };
-
     const serializeStackStates = () => {
       return stackStates.map(stackState =>
         serializeStructure({ ...stackState, stack: undefined }, false)
@@ -615,8 +580,8 @@ export class CdkToolkit {
 
   public async destroy(options: DestroyOptions): Promise<any> {
     let stacks;
-    if (options.sst && options.async && options.outputPath) {
-      const cxapiAssembly = new cxapi.CloudAssembly(options.outputPath);
+    if (options.sst && options.sstAsyncDestroy && options.sstCdkOutputPath) {
+      const cxapiAssembly = new cxapi.CloudAssembly(options.sstCdkOutputPath);
       const assembly = new CloudAssembly(cxapiAssembly);
       stacks = await assembly.selectStacks([options.stackNames[0]], {
         extend: ExtendedStackSelection.None,
@@ -649,10 +614,10 @@ export class CdkToolkit {
           stack,
           deployName: stack.stackName,
           roleArn: options.roleArn,
-          async: options.async,
+          sstAsyncDestroy: options.sstAsyncDestroy,
         });
 
-        if (options.sst && options.async) {
+        if (options.sst && options.sstAsyncDestroy) {
           asyncResult = { status: result.status };
           continue;
         }
@@ -665,7 +630,7 @@ export class CdkToolkit {
     }
 
     if (options.sst) {
-      if (options.async) {
+      if (options.sstAsyncDestroy) {
         return asyncResult;
       } else {
         return {
@@ -678,10 +643,10 @@ export class CdkToolkit {
     }
   }
 
-  public async list(selectors: string[], options: { long?: boolean, sst?: boolean, outputPath?: string } = { }) {
+  public async list(selectors: string[], options: { long?: boolean, sst?: boolean, sstCdkOutputPath?: string } = { }) {
     let stacks;
-    if (options.outputPath) {
-      const cxapiAssembly = new cxapi.CloudAssembly(options.outputPath);
+    if (options.sstCdkOutputPath) {
+      const cxapiAssembly = new cxapi.CloudAssembly(options.sstCdkOutputPath);
       const assembly = new CloudAssembly(cxapiAssembly);
       stacks = await assembly.selectStacks(selectors, { defaultBehavior: DefaultSelection.AllStacks });
     } else {
@@ -720,8 +685,8 @@ export class CdkToolkit {
     return 0; // exit-code
   }
 
-  public async destroyStatus(outputPath: string, options: DeployOptions) {
-    const cxapiAssembly = new cxapi.CloudAssembly(outputPath);
+  public async destroyStatus(sstCdkOutputPath: string, options: DeployOptions) {
+    const cxapiAssembly = new cxapi.CloudAssembly(sstCdkOutputPath);
     const assembly = new CloudAssembly(cxapiAssembly);
     const stacks = await assembly.selectStacks([options.stackNames[0]], {
       extend: ExtendedStackSelection.None,
@@ -800,7 +765,7 @@ export class CdkToolkit {
    */
   public async bootstrap(
     environmentSpecs: string[], toolkitStackName: string | undefined, roleArn: string | undefined,
-    useNewBootstrapping: boolean, force: boolean | undefined, props: BootstrappingParameters, sst?: boolean, outputPath?: string): Promise<any> {
+    useNewBootstrapping: boolean, force: boolean | undefined, props: BootstrappingParameters, sst?: boolean, sstCdkOutputPath?: string): Promise<any> {
     // If there is an '--app' argument and an environment looks like a glob, we
     // select the environments from the app. Otherwise use what the user said.
 
@@ -809,7 +774,7 @@ export class CdkToolkit {
 
     // Partition into globs and non-globs (this will mutate environmentSpecs).
     const globSpecs = partition(environmentSpecs, looksLikeGlob);
-    if (globSpecs.length > 0 && !this.props.cloudExecutable.hasApp && !outputPath) {
+    if (globSpecs.length > 0 && !this.props.cloudExecutable.hasApp && !sstCdkOutputPath) {
       throw new Error(`'${globSpecs}' is not an environment name. Run in app directory to glob or specify an environment name like \'aws://123456789012/us-east-1\'.`);
     }
 
@@ -823,8 +788,8 @@ export class CdkToolkit {
     }
 
     // If this is called from Seed workflow
-    if (outputPath) {
-      const cxapiAssembly = new cxapi.CloudAssembly(outputPath);
+    if (sstCdkOutputPath) {
+      const cxapiAssembly = new cxapi.CloudAssembly(sstCdkOutputPath);
       const assembly = new CloudAssembly(cxapiAssembly);
       const stacks = await assembly.selectStacks([], { defaultBehavior: DefaultSelection.AllStacks });
       environments.push(...await globEnvironmentsFromStacks(stacks, globSpecs, this.props.sdkProvider));
@@ -1091,22 +1056,28 @@ export interface DeployOptions {
   outputsFile?: string;
 
   /**
-   * Path to pre-existing cdk.out
-   * @default - cdk.out is auto-generated
-   */
-  outputPath?: string;
-
-  /**
-   * Start dpeloying and returns right away.
-   * @default false
-   */
-  async?: boolean;
-
-  /**
    * Whether called from sst cli.
    * @default false
    */
   sst?: boolean;
+
+  /**
+   * Path to pre-existing cdk.out
+   * @default - cdk.out is auto-generated
+   */
+  sstCdkOutputPath?: string;
+
+  /**
+   * Start deploying and returns right away.
+   * @default false
+   */
+  sstAsyncDeploy?: boolean;
+
+  /**
+   * Start deploy without generating and applying changeset.
+   * @default false
+   */
+  sstSkipChangeset?: boolean;
 }
 
 export interface DestroyOptions {
@@ -1136,22 +1107,22 @@ export interface DestroyOptions {
   fromDeploy?: boolean
 
   /**
+   * Whether called from sst cli.
+   * @default false
+   */
+  sst?: boolean;
+
+  /**
    * Path to pre-existing cdk.out
    * @default - cdk.out is auto-generated
    */
-  outputPath?: string;
+  sstCdkOutputPath?: string;
 
   /**
    * Start dpeloying and returns right away.
    * @default false
    */
-  async?: boolean;
-
-  /**
-   * Whether called from sst cli.
-   * @default false
-   */
-  sst?: boolean;
+  sstAsyncDestroy?: boolean;
 }
 
 /**
@@ -1210,10 +1181,7 @@ export interface StackState {
   events?: StackEvent[];
   eventsLatestErrorMessage?: string;
   eventsFirstEventAt?: Date;
-  resourceCount?: number;
-  resourceDoneCount?: number;
   errorMessage?: string;
-  stackArn?: string;
   outputs?: Record<string, string>;
 }
 
