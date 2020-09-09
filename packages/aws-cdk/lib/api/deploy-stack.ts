@@ -217,7 +217,6 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
     ? templateParams.diff(finalParameterValues, cloudFormationStack.parameters)
     : templateParams.toStackParameters(finalParameterValues);
 
-  console.log({ usePreviousParameters: options.usePreviousParameters, stackParams: JSON.stringify(stackParams) });
   if (await canSkipDeploy(options, cloudFormationStack, stackParams)) {
     debug(`${deployName}: skipping deployment (use --force to override)`);
     return {
@@ -283,29 +282,38 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
       debug('Initiating execution of changeset %s on stack %s', changeSetName, deployName);
       await cfn.executeChangeSet({ StackName: deployName, ChangeSetName: changeSetName }).promise();
     }
+    else if (update) {
+      debug('Initiating updating of stack %s', deployName);
+      try {
+        await cfn.updateStack({
+          StackName: deployName,
+          TemplateBody: bodyParameter.TemplateBody,
+          TemplateURL: bodyParameter.TemplateURL,
+          Parameters: stackParams.apiParameters,
+          RoleARN: options.roleArn,
+          NotificationARNs: options.notificationArns,
+          Capabilities: ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'],
+          Tags: options.tags,
+        }).promise();
+      } catch(e) {
+        if (e.code === 'ValidationError' && e.message === 'No updates are to be performed.') {
+          return { noOp: true, outputs: cloudFormationStack.outputs, stackArtifact };
+        }
+        throw e;
+      }
+    }
     else {
-      debug('Initiating deployment of stack %s', deployName);
-      update
-        ? await cfn.updateStack({
-            StackName: deployName,
-            TemplateBody: bodyParameter.TemplateBody,
-            TemplateURL: bodyParameter.TemplateURL,
-            Parameters: stackParams.apiParameters,
-            RoleARN: options.roleArn,
-            NotificationARNs: options.notificationArns,
-            Capabilities: ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'],
-            Tags: options.tags,
-          }).promise()
-        : await cfn.createStack({
-            StackName: deployName,
-            TemplateBody: bodyParameter.TemplateBody,
-            TemplateURL: bodyParameter.TemplateURL,
-            Parameters: stackParams.apiParameters,
-            RoleARN: options.roleArn,
-            NotificationARNs: options.notificationArns,
-            Capabilities: ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'],
-            Tags: options.tags,
-          }).promise();
+      debug('Initiating creation of stack %s', deployName);
+      await cfn.createStack({
+        StackName: deployName,
+        TemplateBody: bodyParameter.TemplateBody,
+        TemplateURL: bodyParameter.TemplateURL,
+        Parameters: stackParams.apiParameters,
+        RoleARN: options.roleArn,
+        NotificationARNs: options.notificationArns,
+        Capabilities: ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'],
+        Tags: options.tags,
+      }).promise();
     }
 
     if (options.sstAsyncDeploy) {
