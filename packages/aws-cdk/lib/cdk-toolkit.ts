@@ -325,13 +325,13 @@ export class CdkToolkit {
                 stackState.status = STACK_DEPLOY_STATUS_UNCHANGED;
                 stackState.endedAt = stackState.startedAt;
                 hasSucceededStack = true;
-                success(' ✅  %s (no changes)', stackState.name);
+                success('\n ✅  %s (no changes)\n', stackState.name);
               } else if (status === 'no_resources') {
                 stackState.status = STACK_DEPLOY_STATUS_FAILED;
                 stackState.endedAt = stackState.startedAt;
                 stackState.errorMessage = `The ${stackState.name} stack contains no resources.`;
                 skipUndeployedStacks();
-                error(' ❌  %s failed: %s', colors.bold(stackState.name), stackState.errorMessage);
+                error('\n ❌  %s failed: %s\n', colors.bold(stackState.name), stackState.errorMessage);
               } else if (status === 'deploying') {
                 stackState.status = STACK_DEPLOY_STATUS_DEPLOYING;
               } else {
@@ -339,7 +339,7 @@ export class CdkToolkit {
                 stackState.endedAt = stackState.startedAt;
                 stackState.errorMessage = `The ${stackState.name} stack failed to deploy.`;
                 skipUndeployedStacks();
-                error(' ❌  %s failed: %s', colors.bold(stackState.name), stackState.errorMessage);
+                error('\n ❌  %s failed: %s\n', colors.bold(stackState.name), stackState.errorMessage);
               }
 
             } catch (deployEx) {
@@ -373,7 +373,7 @@ export class CdkToolkit {
                     stackState.endedAt = stackState.startedAt;
                     stackState.errorMessage = bootstrapEx.message;
                     skipUndeployedStacks();
-                    error(' ❌  %s failed: %s', colors.bold(stackState.name), bootstrapEx);
+                    error('\n ❌  %s failed: %s\n', colors.bold(stackState.name), bootstrapEx);
                   }
                 }
 
@@ -383,7 +383,7 @@ export class CdkToolkit {
                 stackState.endedAt = stackState.startedAt;
                 stackState.errorMessage = deployEx.message;
                 skipUndeployedStacks();
-                error(' ❌  %s failed: %s', colors.bold(stackState.name), deployEx);
+                error('\n ❌  %s failed: %s\n', colors.bold(stackState.name), deployEx);
               }
             }
           }),
@@ -421,7 +421,7 @@ export class CdkToolkit {
               if ( ! result.noOp) {
                 stackState.status = STACK_DEPLOY_STATUS_SUCCEEDED;
                 stackState.endedAt = Date.now();
-                success(' ✅  %s', stackState.name);
+                success('\n ✅  %s\n', stackState.name);
               }
             } catch (statusEx) {
               debug('%s', statusEx);
@@ -431,7 +431,7 @@ export class CdkToolkit {
                 stackState.endedAt = Date.now();
                 stackState.errorMessage = stackState.eventsLatestErrorMessage || statusEx.message;
                 skipUndeployedStacks();
-                error(' ❌  %s failed: %s', colors.bold(stackState.name), stackState.errorMessage);
+                error('\n ❌  %s failed: %s\n', colors.bold(stackState.name), stackState.errorMessage);
               }
             }
           }),
@@ -506,6 +506,8 @@ export class CdkToolkit {
         );
         let eventStatus = event.ResourceStatus;
         if (eventInRange && eventNotLogged) {
+          // Print new events
+          print('%s | %s | %s | %s', stackState.name, event.ResourceStatus, event.ResourceType, event.LogicalResourceId);
           // Keep track of first failed event
           if (eventStatus
             && (eventStatus.endsWith('FAILED') || eventStatus.endsWith('ROLLBACK_IN_PROGRESS'))
@@ -1181,6 +1183,8 @@ export interface StackState {
   events?: StackEvent[];
   eventsLatestErrorMessage?: string;
   eventsFirstEventAt?: Date;
+  resourceCount?: number;
+  resourceDoneCount?: number;
   errorMessage?: string;
   outputs?: Record<string, string>;
 }
