@@ -506,14 +506,18 @@ export class CdkToolkit {
         );
         let eventStatus = event.ResourceStatus;
         if (eventInRange && eventNotLogged) {
-          // Print new events
-          print('%s | %s | %s | %s', stackState.name, event.ResourceStatus, event.ResourceType, event.LogicalResourceId);
+          let isFirstError = false;
           // Keep track of first failed event
           if (eventStatus
             && (eventStatus.endsWith('FAILED') || eventStatus.endsWith('ROLLBACK_IN_PROGRESS'))
             && ! stackState.eventsLatestErrorMessage) {
             stackState.eventsLatestErrorMessage = event.ResourceStatusReason;
+            isFirstError = true;
           }
+          // Print new events
+          isFirstError
+            ? print(colors.red('%s | %s | %s | %s %s'), stackState.name, event.ResourceStatus, event.ResourceType, event.LogicalResourceId, event.ResourceStatusReason)
+            : print('%s | %s | %s | %s', stackState.name, event.ResourceStatus, event.ResourceType, event.LogicalResourceId);
           // Prepare for next monitoring action
           events.push({
             eventId: event.EventId,
@@ -624,9 +628,9 @@ export class CdkToolkit {
           continue;
         }
 
-        success(`\n ✅  %s: ${action}ed`, colors.blue(stack.displayName));
+        success(`\n ✅  %s: ${action}ed\n`, colors.blue(stack.displayName));
       } catch (e) {
-        error(`\n ❌  %s: ${action} failed`, colors.blue(stack.displayName), e);
+        error(`\n ❌  %s: ${action} failed\n`, colors.blue(stack.displayName), e);
         throw e;
       }
     }
