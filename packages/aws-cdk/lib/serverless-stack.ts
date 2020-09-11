@@ -143,7 +143,7 @@ export async function sstDeploy(options: CliOption = { }) {
       0
     );
     if (currEventCount === prevEventCount) {
-      print('Checking for deploy status...');
+      print('Checking deploy status...');
     }
 
 
