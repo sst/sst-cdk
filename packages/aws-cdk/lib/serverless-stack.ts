@@ -119,6 +119,12 @@ export async function sstDeploy(options: CliOption = { }) {
 
   let stackStates: StackState[] | undefined = undefined;
   while (true) {
+    // Check CFN events before update
+    const prevEventCount = (stackStates || []).reduce(
+      (acc, stackState) => acc + (stackState.events || []).length,
+      0
+    );
+
     const response: ProgressState = await cli.parallelDeploy({
       stackNames: [],
       exclusively: true,
@@ -128,7 +134,18 @@ export async function sstDeploy(options: CliOption = { }) {
       sstAsyncDeploy: true,
       sstSkipChangeset: true,
     }, stackStates);
+
     stackStates = response.stackStates;
+
+    // Check CFN events after update
+    const currEventCount = (response.stackStates || []).reduce(
+      (acc, stackState) => acc + (stackState.events || []).length,
+      0
+    );
+    if (currEventCount === prevEventCount) {
+      print('Checking for deploy status...');
+    }
+
 
     // Print progress
     //const printProgress = () => {

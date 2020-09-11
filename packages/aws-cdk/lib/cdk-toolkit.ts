@@ -515,9 +515,14 @@ export class CdkToolkit {
             isFirstError = true;
           }
           // Print new events
-          isFirstError
-            ? print(colors.red('%s | %s | %s | %s %s'), stackState.name, event.ResourceStatus, event.ResourceType, event.LogicalResourceId, event.ResourceStatusReason)
-            : print('%s | %s | %s | %s', stackState.name, event.ResourceStatus, event.ResourceType, event.LogicalResourceId);
+          const color = colorFromStatusResult(event.ResourceStatus);
+          print('%s | %s | %s | %s %s',
+            stackState.name,
+            color(event.ResourceStatus || ''),
+            event.ResourceType,
+            color(colors.bold(event.LogicalResourceId || '')),
+            isFirstError ? colors.red(event.ResourceStatusReason || '') : ''
+          );
           // Prepare for next monitoring action
           events.push({
             eventId: event.EventId,
@@ -531,6 +536,24 @@ export class CdkToolkit {
       });
       stackState.events = events;
     };
+
+    const colorFromStatusResult = (status?: string) => {
+      if (!status) {
+        return colors.reset;
+      }
+
+      if (status.indexOf('FAILED') !== -1) {
+        return colors.red;
+      }
+      if (status.indexOf('ROLLBACK') !== -1) {
+        return colors.yellow;
+      }
+      if (status.indexOf('COMPLETE') !== -1) {
+        return colors.green;
+      }
+
+      return colors.reset;
+    }
 
     const serializeStackStates = () => {
       return stackStates.map(stackState =>
