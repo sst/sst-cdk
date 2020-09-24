@@ -219,16 +219,9 @@ export class CdkToolkit {
         });
 
         if (options.sstAsyncDeploy) {
-          let account, region;
-          if (result.stackArn) {
-            // arn:aws:cloudformation:us-east-2:123456789012:stack/mystack
-            const stackArnParts = result.stackArn.split(':');
-            account = stackArnParts[4];
-            region = stackArnParts[3];
-          }
           asyncResult = {
-            account,
-            region,
+            account: result.stackEnv?.account,
+            region: result.stackEnv?.region,
             status: result.noOp ? 'unchanged' : 'deploying',
             outputs: result.outputs,
           };

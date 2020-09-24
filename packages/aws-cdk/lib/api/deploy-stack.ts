@@ -38,6 +38,7 @@ export interface DeployStackResult {
   readonly outputs: { [name: string]: string };
   readonly stackArn?: string;
   readonly stackArtifact: cxapi.CloudFormationStackArtifact;
+  readonly stackEnv?: cxapi.Environment;
 }
 
 /** @experimental */
@@ -224,6 +225,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
       outputs: cloudFormationStack.outputs,
       stackArn: cloudFormationStack.stackId,
       stackArtifact,
+      stackEnv,
     };
   } else {
     debug(`${deployName}: deploying...`);
@@ -273,7 +275,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
   if (!options.sstSkipChangeset && changeSet && changeSetDescription && changeSetHasNoChanges(changeSetDescription)) {
     debug('No changes are to be performed on %s.', deployName);
     await cfn.deleteChangeSet({ StackName: deployName, ChangeSetName: changeSetName }).promise();
-    return { noOp: true, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact };
+    return { noOp: true, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact, stackEnv };
   }
 
   const execute = options.execute === undefined ? true : options.execute;
@@ -297,7 +299,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
         }).promise();
       } catch(e) {
         if (e.code === 'ValidationError' && e.message === 'No updates are to be performed.') {
-          return { noOp: true, outputs: cloudFormationStack.outputs, stackArtifact };
+          return { noOp: true, outputs: cloudFormationStack.outputs, stackArtifact, stackEnv };
         }
         throw e;
       }
@@ -317,11 +319,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
     }
 
     if (options.sstAsyncDeploy) {
-      return {
-        noOp: false,
-        outputs: cloudFormationStack.outputs,
-        stackArtifact,
-      };
+      return { noOp: false, outputs: cloudFormationStack.outputs, stackArtifact, stackEnv };
     }
 
     // eslint-disable-next-line max-len
@@ -347,13 +345,14 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
   }
 
   return changeSet
-    ? { noOp: false, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact }
-    : { noOp: false, outputs: cloudFormationStack.outputs, stackArtifact };
+    ? { noOp: false, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact, stackEnv }
+    : { noOp: false, outputs: cloudFormationStack.outputs, stackArtifact, stackEnv };
 }
 
 /** @experimental */
 export async function deployStatus(options: DeployStackOptions): Promise<DeployStackResult> {
   const stackArtifact = options.stack;
+  const stackEnv = options.resolvedEnvironment;
   const cfn = options.sdk.cloudFormation();
   const deployName = options.deployName || stackArtifact.stackName;
   let cloudFormationStack = await CloudFormationStack.lookup(cfn, deployName);
@@ -366,6 +365,7 @@ export async function deployStatus(options: DeployStackOptions): Promise<DeployS
       outputs: cloudFormationStack.outputs,
       stackArn: cloudFormationStack.stackId,
       stackArtifact,
+      stackEnv,
     };
   } else if (status.isCreationFailure) {
     throw new Error(`The stack named ${deployName} failed creation, it may need to be manually deleted from the AWS console: ${status}`);
@@ -378,6 +378,7 @@ export async function deployStatus(options: DeployStackOptions): Promise<DeployS
     outputs: cloudFormationStack.outputs,
     stackArn: cloudFormationStack.stackId,
     stackArtifact,
+    stackEnv,
   };
 }
 
