@@ -219,9 +219,16 @@ export class CdkToolkit {
         });
 
         if (options.sstAsyncDeploy) {
+          let account, region;
+          if (result.stackArn) {
+            // arn:aws:cloudformation:us-east-2:123456789012:stack/mystack
+            const stackArnParts = result.stackArn.split(':');
+            account = stackArnParts[4];
+            region = stackArnParts[3];
+          }
           asyncResult = {
-            account: (await this.props.sdkProvider.defaultAccount())?.accountId,
-            region: this.props.sdkProvider.defaultRegion,
+            account,
+            region,
             status: result.noOp ? 'unchanged' : 'deploying',
             outputs: result.outputs,
           };
@@ -362,6 +369,7 @@ export class CdkToolkit {
                     force,
                     { },
                     sst,
+                    options.sstCdkOutputPath
                   );
                   debug('Bootstraped stack %s', stackState.name);
                 } catch (bootstrapEx) {
