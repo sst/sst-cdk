@@ -4,11 +4,10 @@ import { CloudFormationDeployments } from './api/cloudformation-deployments';
 import { CloudExecutable } from './api/cxapp/cloud-executable';
 import { execProgram } from './api/cxapp/exec';
 import { ToolkitInfo } from './api/toolkit-info';
-import { CdkToolkit, StackState, ProgressState } from './cdk-toolkit';
+import { CdkToolkit } from './cdk-toolkit';
 import { RequireApproval } from './diff';
-import { setLogLevel, print } from './logging';
+import { setLogLevel } from './logging';
 import { Configuration } from './settings';
-//import { RewritableBlock } from './api/util/display';
 
 interface CliOption {
   readonly app?: string;
@@ -107,92 +106,18 @@ export async function sstSynth(options: CliOption = { }) {
  * @returns { stacks: [{ id, name }] }
  */
 export async function sstDeploy(options: CliOption = { }) {
-  process.env.ASYNC_INVOCATION = 'true';
-
-  // create rewritable block
-  //const isWindows = process.platform === 'win32';
-  //const stream = process.stderr;
-  //const fancyOutputAvailable = !isWindows && stream.isTTY && !options.ci;
-  //const block = new RewritableBlock(stream);
+  process.env.CFN_QUICK_RETRY = 'true';
 
   const { cli, toolkitStackName } = await initCommandLine(options);
-
-  let stackStates: StackState[] | undefined = undefined;
-  while (true) {
-    // Check CFN events before update
-    const prevEventCount = (stackStates || []).reduce(
-      (acc, stackState) => acc + (stackState.events || []).length,
-      0
-    );
-
-    const response: ProgressState = await cli.parallelDeploy({
-      stackNames: [],
-      exclusively: true,
-      requireApproval: RequireApproval.Never,
-      toolkitStackName,
-      sst: true,
-      sstAsyncDeploy: true,
-      sstSkipChangeset: true,
-    }, stackStates);
-
-    stackStates = response.stackStates;
-
-    // Check CFN events after update
-    const currEventCount = (response.stackStates || []).reduce(
-      (acc, stackState) => acc + (stackState.events || []).length,
-      0
-    );
-    if (currEventCount === prevEventCount) {
-      print('Checking deploy status...');
-    }
-
-
-    // Print progress
-    //const printProgress = () => {
-    //  block.displayLines(['!!! CURRENT TIME !!!', colors.cyan(`${Date.now()}`)]);
-    //  stackLogs.push(stacks.length === 1
-    //    ? `INFO: Deploying 1 stack...\n`
-    //    : `INFO: Deploying ${stacks.length} stacks...\n`);
-    //  return stackStates.map(stackState =>
-    //    serializeStructure({ ...stackState, stack: undefined }, false)
-    //  ).join('\n');
-    //}
-
-    if ( response && response.isCompleted) { break; }
-
-    await new Promise(resolve => setTimeout(resolve, 5000));
-  }
-
-  // Print output
-  stackStates.forEach(stackState => {
-    print('\nStack %s', stackState.name);
-    if (stackState.status === 'succeeded') {
-      print('  Status: deployed');
-    }
-    else if (stackState.status === 'unchanged') {
-      print('  Status: no changes');
-    }
-    else if (stackState.status === 'failed') {
-      print('  Status: failed');
-      print('  Error: %s', stackState.errorMessage);
-    }
-    else if (stackState.status === 'skipped') {
-      print('  Status: not deployed');
-    }
-
-    if (stackState.outputs && Object.keys(stackState.outputs).length > 0) {
-      print('  Outputs:');
-      for (const name of Object.keys(stackState.outputs)) {
-        const value = stackState.outputs[name];
-        print('  - %s: %s', name, value);
-      }
-    }
+  return await cli.deploy({
+    stackNames: [],
+    exclusively: true,
+    requireApproval: RequireApproval.Never,
+    toolkitStackName,
+    sst: true,
+    sstAsyncDeploy: true,
+    sstSkipChangeset: true,
   });
-
-  return stackStates && stackStates.map(stackState => ({
-    name: stackState.name,
-    status: stackState.status,
-  }));
 }
 
 /**
@@ -202,15 +127,14 @@ export async function sstDeploy(options: CliOption = { }) {
  *
  * @param sstCdkOutputPath the path to cdk.out folder.
  * @param force always deploy stack even if templates are identical.
- * @param stackStates stackStates from the previous call.
  *
  * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deploying'  }
  */
-export async function sstDeployAsync(sstCdkOutputPath: string, force: boolean, stackStates?: StackState[]) {
-  process.env.ASYNC_INVOCATION = 'true';
+export async function sstDeployAsync(sstCdkOutputPath: string, force: boolean) {
+  process.env.CFN_QUICK_RETRY = 'true';
 
   const { cli, toolkitStackName } = await initCommandLine({ verbose: 4 });
-  return await cli.parallelDeploy({
+  return await cli.deploy({
     stackNames: [],
     exclusively: true,
     requireApproval: RequireApproval.Never,
@@ -220,7 +144,7 @@ export async function sstDeployAsync(sstCdkOutputPath: string, force: boolean, s
     sstCdkOutputPath,
     sstAsyncDeploy: true,
     sstSkipChangeset: true,
-  }, stackStates);
+  });
 }
 
 /**
@@ -253,7 +177,7 @@ export async function sstDestroy(options: CliOption = { }) {
  * @returns { account, region, status: 'destroying' | 'destroyed'  }
  */
 export async function sstDestroyAsync(sstCdkOutputPath: string, stackName: string) {
-  process.env.ASYNC_INVOCATION = 'true';
+  process.env.CFN_QUICK_RETRY = 'true';
 
   const { cli } = await initCommandLine();
   return await cli.destroy({
@@ -277,7 +201,7 @@ export async function sstDestroyAsync(sstCdkOutputPath: string, stackName: strin
  * @returns { status: 'destroying' | 'destroyed'  }
  */
 export async function sstDestroyStatus(sstCdkOutputPath: string, stackName: string) {
-  process.env.ASYNC_INVOCATION = 'true';
+  process.env.CFN_QUICK_RETRY = 'true';
 
   const { cli, toolkitStackName } = await initCommandLine();
   return await cli.destroyStatus(sstCdkOutputPath, {

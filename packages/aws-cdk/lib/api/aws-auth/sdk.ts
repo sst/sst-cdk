@@ -52,7 +52,7 @@ export class SDK implements ISDK {
    *
    * So we're allowing way more retries, but waiting a bit more.
    */
-  private readonly cloudFormationRetryOptions = process.env.ASYNC_INVOCATION === 'true'
+  private readonly cloudFormationRetryOptions = process.env.CFN_QUICK_RETRY === 'true'
     ? { maxRetries: 3, retryDelayOptions: { base: 300 } }
     : { maxRetries: 10, retryDelayOptions: { base: 1_000 } };
 
