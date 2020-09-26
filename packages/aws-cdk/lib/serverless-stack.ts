@@ -99,7 +99,7 @@ export async function sstDeploy(options: Options = {}) {
 
   const { cli, toolkitStackName } = await initCommandLine({ ...options, verbose: 4 });
   return await cli.deploy({
-    stackNames: [],
+    stackNames: options.stackName ? [options.stackName] : [],
     exclusively: true,
     requireApproval: RequireApproval.Never,
     toolkitStackName,
