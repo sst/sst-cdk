@@ -24,8 +24,6 @@ interface Options {
 /**
  * Bootstrap and returns the boostrapped environment. Only returns 1 environment.
  *
- * Used by sst cli.
- *
  * @param options CLI options
  *
  * @returns {
@@ -39,7 +37,7 @@ export async function sstBootstrap(options: Options = { }) {
   const roleArn = undefined;
   const useNewBootstrapping = false;
   const force = true;
-  const sst = true;
+  const nonCli = true;
   return await cli.bootstrap(
     environmentSpecs,
     toolkitStackName,
@@ -47,14 +45,12 @@ export async function sstBootstrap(options: Options = { }) {
     useNewBootstrapping,
     force,
     { },
-    sst,
+    nonCli,
   );
 }
 
 /**
  * List all stacks with dependencies.
- *
- * Used by deploy workflow.
  *
  * @param options CLI options
  *
@@ -80,14 +76,12 @@ export async function sstList(options: Options = { }) {
 export async function sstSynth(options: Options = { }) {
   const { cli } = await initCommandLine(options);
   return await cli.synth([], false, {
-    sst: true,
+    nonCli: true,
   });
 }
 
 /**
  * Deploy all stacks in parallel asynchronously, and returns the environment deployed to and progress state.
- *
- * Used by deploy workflow.
  *
  * @param options CLI options
  *
@@ -112,8 +106,6 @@ export async function sstDeploy(options: Options = {}) {
 /**
  * Destroy a single stack exclusively or destroy all stacks, and returns destroyed stacks.
  *
- * Used by sst cli.
- *
  * @param options CLI options
  *
  * @returns { stacks: [{ id, name }] }
@@ -124,51 +116,8 @@ export async function sstDestroy(options: Options = { }) {
     stackNames: options.stackName ? [options.stackName] : [],
     exclusively: true,
     force: true,
-    sst: true,
-  });
-}
-
-/**
- * Destroy a single stack asynchronously, and returns destroy status.
- *
- * Used by deploy workflow.
- *
- * @param sstCdkOutputPath the path to cdk.out folder.
- * @param stackName the stack to be destroy.
- *
- * @returns { account, region, status: 'destroying' | 'destroyed'  }
- */
-export async function sstDestroyAsync(sstCdkOutputPath: string, stackName: string) {
-  process.env.CFN_QUICK_RETRY = 'true';
-
-  const { cli } = await initCommandLine();
-  return await cli.destroy({
-    stackNames: [stackName],
-    exclusively: true,
-    force: true,
-    sst: true,
-    sstCdkOutputPath,
+    sstCdkOutputPath: options.sstCdkOutputPath,
     sstAsyncDestroy: true,
-  });
-}
-
-/**
- * Get asynchronous destroy status.
- *
- * Used by deploy workflow.
- *
- * @param sstCdkOutputPath the path to cdk.out folder.
- * @param stackName the stack to be destroyed.
- *
- * @returns { status: 'destroying' | 'destroyed'  }
- */
-export async function sstDestroyStatus(sstCdkOutputPath: string, stackName: string) {
-  process.env.CFN_QUICK_RETRY = 'true';
-
-  const { cli, toolkitStackName } = await initCommandLine();
-  return await cli.destroyStatus(sstCdkOutputPath, {
-    stackNames: [stackName],
-    toolkitStackName,
   });
 }
 

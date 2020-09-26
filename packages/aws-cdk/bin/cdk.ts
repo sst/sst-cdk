@@ -16,7 +16,7 @@ import { availableInitLanguages, cliInit, printAvailableTemplates } from '../lib
 import { data, debug, error, print, setLogLevel } from '../lib/logging';
 import { PluginHost } from '../lib/plugin';
 import { serializeStructure } from '../lib/serialize';
-import { sstList, sstBootstrap, sstSynth, sstDeploy, sstDestroy, sstDestroyAsync, sstDestroyStatus } from '../lib/serverless-stack';
+import { sstList, sstBootstrap, sstSynth, sstDeploy, sstDestroy } from '../lib/serverless-stack';
 import { Configuration, Settings } from '../lib/settings';
 import * as version from '../lib/version';
 
@@ -326,16 +326,10 @@ async function initCommandLine() {
         return await sstBootstrap(argv);
       case 'sst-synth':
         return await sstSynth(argv);
-
       case 'sst-deploy':
         return await sstDeploy({ ...argv });
-
       case 'sst-destroy':
         return await sstDestroy({ ...argv });
-      case 'sst-destroy-async':
-        return await sstDestroyAsync(args.output, args.STACK);
-      case 'sst-destroy-status':
-        return await sstDestroyStatus(args.output, args.STACK);
 
       default:
         throw new Error('Unknown command: ' + command);

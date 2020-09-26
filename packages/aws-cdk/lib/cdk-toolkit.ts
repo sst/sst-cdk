@@ -273,14 +273,14 @@ export class CdkToolkit {
 
   public async destroy(options: DestroyOptions): Promise<any> {
     let stacks;
-    if (options.sst && options.sstAsyncDestroy && options.sstCdkOutputPath) {
+    if (options.sstCdkOutputPath) {
       const cxapiAssembly = new cxapi.CloudAssembly(options.sstCdkOutputPath);
       const assembly = new CloudAssembly(cxapiAssembly);
       stacks = await assembly.selectStacks([options.stackNames[0]], {
         extend: ExtendedStackSelection.None,
         defaultBehavior: DefaultSelection.None,
       });
-    } else if (options.sst && options.stackNames.length === 0) {
+    } else if (options.stackNames.length === 0) {
       stacks = await this.selectStacksForDestroyAll();
     } else {
       stacks = await this.selectStacksForDestroy(options.stackNames, options.exclusively);
@@ -310,7 +310,7 @@ export class CdkToolkit {
           sstAsyncDestroy: options.sstAsyncDestroy,
         });
 
-        if (options.sst && options.sstAsyncDestroy) {
+        if (options.sstAsyncDestroy) {
           asyncResult = { status: result.status };
           continue;
         }
@@ -322,17 +322,8 @@ export class CdkToolkit {
       }
     }
 
-    if (options.sst) {
-      if (options.sstAsyncDestroy) {
-        return asyncResult;
-      } else {
-        return {
-          stacks: stacks.stackArtifacts.map(stack => ({
-            id: stack.id,
-            name: stack.stackName,
-          })),
-        };
-      }
+    if (options.sstAsyncDestroy) {
+      return asyncResult;
     }
   }
 
@@ -378,30 +369,6 @@ export class CdkToolkit {
     return 0; // exit-code
   }
 
-  public async destroyStatus(sstCdkOutputPath: string, options: DeployOptions) {
-    const cxapiAssembly = new cxapi.CloudAssembly(sstCdkOutputPath);
-    const assembly = new CloudAssembly(cxapiAssembly);
-    const stacks = await assembly.selectStacks([options.stackNames[0]], {
-      extend: ExtendedStackSelection.None,
-      defaultBehavior: DefaultSelection.None,
-    });
-    const stack = stacks.firstStack;
-
-    print('%s: checking status...', colors.bold(stack.displayName));
-
-    try {
-      const { status } = await this.props.cloudFormation.destroyStatus({
-        stack,
-        deployName: stack.stackName,
-        roleArn: options.roleArn,
-      });
-      return { status };
-    } catch (e) {
-      error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
-      throw e;
-    }
-  }
-
   /**
    * Synthesize the given set of stacks (called when the user runs 'cdk synth')
    *
@@ -411,11 +378,11 @@ export class CdkToolkit {
    * OUTPUT: If more than one stack ends up being selected, an output directory
    * should be supplied, where the templates will be written.
    */
-  public async synth(stackNames: string[], exclusively: boolean, options: { sst?: boolean } = { }): Promise<any> {
+  public async synth(stackNames: string[], exclusively: boolean, options: { nonCli?: boolean } = { }): Promise<any> {
     const stacks = await this.selectStacksForDiff(stackNames, exclusively);
 
-    // If calling from SST, print status
-    if (options.sst) {
+    // if 'nonCli' is set, return
+    if (options.nonCli) {
       return {
         stacks: stacks.stackArtifacts.map(stack => ({
           id: stack.id,
@@ -458,7 +425,7 @@ export class CdkToolkit {
    */
   public async bootstrap(
     environmentSpecs: string[], toolkitStackName: string | undefined, roleArn: string | undefined,
-    useNewBootstrapping: boolean, force: boolean | undefined, props: BootstrappingParameters, sst?: boolean, sstCdkOutputPath?: string): Promise<any> {
+    useNewBootstrapping: boolean, force: boolean | undefined, props: BootstrappingParameters, nonCli?: boolean, sstCdkOutputPath?: string): Promise<any> {
     // If there is an '--app' argument and an environment looks like a glob, we
     // select the environments from the app. Otherwise use what the user said.
 
@@ -507,7 +474,7 @@ export class CdkToolkit {
       }
     }));
 
-    if (sst) {
+    if (nonCli) {
       return { environment: environments[0] };
     }
   }
@@ -740,10 +707,10 @@ export interface DeployOptions {
   outputsFile?: string;
 
   /**
-   * Whether called from sst cli.
+   * Whether called from non cli.
    * @default false
    */
-  sst?: boolean;
+  nonCli?: boolean;
 
   /**
    * Path to pre-existing cdk.out
@@ -791,10 +758,10 @@ export interface DestroyOptions {
   fromDeploy?: boolean
 
   /**
-   * Whether called from sst cli.
+   * Whether called from non cli.
    * @default false
    */
-  sst?: boolean;
+  nonCli?: boolean;
 
   /**
    * Path to pre-existing cdk.out

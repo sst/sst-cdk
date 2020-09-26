@@ -4,7 +4,7 @@ import { Tag } from '../cdk-toolkit';
 import { debug } from '../logging';
 import { publishAssets } from '../util/asset-publishing';
 import { Mode, SdkProvider } from './aws-auth';
-import { deployStack, DeployStackResult, destroyStack, destroyStatus } from './deploy-stack';
+import { deployStack, DeployStackResult, destroyStack } from './deploy-stack';
 import { ToolkitInfo } from './toolkit-info';
 import { CloudFormationStack, Template } from './util/cloudformation';
 
@@ -195,18 +195,6 @@ export class CloudFormationDeployments {
       deployName: options.deployName,
       quiet: options.quiet,
       sstAsyncDestroy: options.sstAsyncDestroy,
-    });
-  }
-
-  public async destroyStatus(options: DestroyStackOptions) {
-    const { stackSdk, cloudFormationRoleArn: roleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
-
-    return destroyStatus({
-      sdk: stackSdk,
-      roleArn,
-      stack: options.stack,
-      deployName: options.deployName,
-      quiet: options.quiet,
     });
   }
 
