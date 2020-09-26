@@ -61,7 +61,7 @@ export async function sstBootstrap(options: Options = { }) {
  * @returns { stacks: [{ id, name, dependencies }] }
  */
 export async function sstList(options: Options = { }) {
-  const { cli } = await initCommandLine();
+  const { cli } = await initCommandLine(options);
   return await cli.list([], {
     nonCli: true,
     sstCdkOutputPath: options.sstCdkOutputPath,
@@ -97,7 +97,7 @@ export async function sstSynth(options: Options = { }) {
 export async function sstDeploy(options: Options = {}) {
   process.env.CFN_QUICK_RETRY = 'true';
 
-  const { cli, toolkitStackName } = await initCommandLine({ verbose: 4 });
+  const { cli, toolkitStackName } = await initCommandLine({ ...options, verbose: 4 });
   return await cli.deploy({
     stackNames: [],
     exclusively: true,
