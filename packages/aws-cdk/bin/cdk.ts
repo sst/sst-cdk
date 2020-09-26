@@ -16,7 +16,7 @@ import { availableInitLanguages, cliInit, printAvailableTemplates } from '../lib
 import { data, debug, error, print, setLogLevel } from '../lib/logging';
 import { PluginHost } from '../lib/plugin';
 import { serializeStructure } from '../lib/serialize';
-import { sstEnv, sstBootstrap, sstSynth, sstDeploy, sstDeployAsync, sstDestroy, sstDestroyAsync, sstDestroyStatus } from '../lib/serverless-stack';
+import { sstList, sstBootstrap, sstSynth, sstDeploy, sstDestroy, sstDestroyAsync, sstDestroyStatus } from '../lib/serverless-stack';
 import { Configuration, Settings } from '../lib/settings';
 import * as version from '../lib/version';
 
@@ -320,8 +320,8 @@ async function initCommandLine() {
       case 'version':
         return data(version.DISPLAY_VERSION);
 
-      case 'sst-env':
-        return await sstEnv(argv);
+      case 'sst-list':
+        return await sstList(argv);
       case 'sst-bootstrap':
         return await sstBootstrap(argv);
       case 'sst-synth':
@@ -329,8 +329,6 @@ async function initCommandLine() {
 
       case 'sst-deploy':
         return await sstDeploy({ ...argv });
-      case 'sst-deploy-async':
-        return await sstDeployAsync(args.outputPath, args.force);
 
       case 'sst-destroy':
         return await sstDestroy({ ...argv });

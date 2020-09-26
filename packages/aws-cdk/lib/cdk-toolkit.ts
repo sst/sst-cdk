@@ -335,7 +335,7 @@ export class CdkToolkit {
     }
   }
 
-  public async list(selectors: string[], options: { long?: boolean, sst?: boolean, sstCdkOutputPath?: string } = { }) {
+  public async list(selectors: string[], options: { long?: boolean, nonCli?: boolean, sstCdkOutputPath?: string } = { }) {
     let stacks;
     if (options.sstCdkOutputPath) {
       const cxapiAssembly = new cxapi.CloudAssembly(options.sstCdkOutputPath);
@@ -358,8 +358,8 @@ export class CdkToolkit {
       return long; // will be YAML formatted output
     }
 
-    // if we are in "sst" mode, emit the array as-is (JSON/YAML)
-    if (options.sst) {
+    // if we are in "nonCli" mode, emit the array as-is (JSON/YAML)
+    if (options.nonCli) {
       return {
         stacks: stacks.stackArtifacts.map(stack => ({
           id: stack.id,

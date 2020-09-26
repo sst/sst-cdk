@@ -9,28 +9,16 @@ import { RequireApproval } from './diff';
 import { setLogLevel } from './logging';
 import { Configuration } from './settings';
 
-interface CliOption {
+interface Options {
+  // Generic config
   readonly app?: string;
   readonly output?: string;
   readonly verbose?: number;
   readonly noColor?: boolean;
+  // Command specific config
+  readonly force?: boolean;
   readonly stackName?: string;
-}
-
-/**
- * Get default environment.
- *
- * Used by sst cli.
- *
- * @param options CLI options
- *
- * @returns {
- *    environment: { account, region }
- *  }
- */
-export async function sstEnv(options: CliOption = { }) {
-  const { cli } = await initCommandLine(options);
-  return await cli.env();
+  readonly sstCdkOutputPath?: string;
 }
 
 /**
@@ -44,7 +32,7 @@ export async function sstEnv(options: CliOption = { }) {
  *    environment: { account, region }
  *  }
  */
-export async function sstBootstrap(options: CliOption = { }) {
+export async function sstBootstrap(options: Options = { }) {
   const { cli } = await initCommandLine(options);
   const environmentSpecs:string[] = [];
   const toolkitStackName = undefined;
@@ -68,15 +56,15 @@ export async function sstBootstrap(options: CliOption = { }) {
  *
  * Used by deploy workflow.
  *
- * @param sstCdkOutputPath the path to cdk.out folder.
+ * @param options CLI options
  *
  * @returns { stacks: [{ id, name, dependencies }] }
  */
-export async function sstList(sstCdkOutputPath: string) {
+export async function sstList(options: Options = { }) {
   const { cli } = await initCommandLine();
   return await cli.list([], {
-    sst: true,
-    sstCdkOutputPath,
+    nonCli: true,
+    sstCdkOutputPath: options.sstCdkOutputPath,
   });
 }
 
@@ -89,34 +77,10 @@ export async function sstList(sstCdkOutputPath: string) {
  *
  * @returns { stacks: [{ id, name }] }
  */
-export async function sstSynth(options: CliOption = { }) {
+export async function sstSynth(options: Options = { }) {
   const { cli } = await initCommandLine(options);
   return await cli.synth([], false, {
     sst: true,
-  });
-}
-
-/**
- * Deploy a single stack exclusively or deploy all stacks, and returns deployed stacks.
- *
- * Used by sst cli.
- *
- * @param options CLI options
- *
- * @returns { stacks: [{ id, name }] }
- */
-export async function sstDeploy(options: CliOption = { }) {
-  process.env.CFN_QUICK_RETRY = 'true';
-
-  const { cli, toolkitStackName } = await initCommandLine(options);
-  return await cli.deploy({
-    stackNames: [],
-    exclusively: true,
-    requireApproval: RequireApproval.Never,
-    toolkitStackName,
-    sst: true,
-    sstAsyncDeploy: true,
-    sstSkipChangeset: true,
   });
 }
 
@@ -130,7 +94,7 @@ export async function sstDeploy(options: CliOption = { }) {
  *
  * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deploying'  }
  */
-export async function sstDeployAsync(sstCdkOutputPath: string, force: boolean) {
+export async function sstDeploy(options: Options = {}) {
   process.env.CFN_QUICK_RETRY = 'true';
 
   const { cli, toolkitStackName } = await initCommandLine({ verbose: 4 });
@@ -139,9 +103,9 @@ export async function sstDeployAsync(sstCdkOutputPath: string, force: boolean) {
     exclusively: true,
     requireApproval: RequireApproval.Never,
     toolkitStackName,
-    force,
+    force: options.force,
     sst: true,
-    sstCdkOutputPath,
+    sstCdkOutputPath: options.sstCdkOutputPath,
     sstAsyncDeploy: true,
     sstSkipChangeset: true,
   });
@@ -156,7 +120,7 @@ export async function sstDeployAsync(sstCdkOutputPath: string, force: boolean) {
  *
  * @returns { stacks: [{ id, name }] }
  */
-export async function sstDestroy(options: CliOption = { }) {
+export async function sstDestroy(options: Options = { }) {
   const { cli } = await initCommandLine(options);
   return await cli.destroy({
     stackNames: options.stackName ? [options.stackName] : [],
@@ -210,7 +174,7 @@ export async function sstDestroyStatus(sstCdkOutputPath: string, stackName: stri
   });
 }
 
-async function initCommandLine(options: CliOption = { }) {
+async function initCommandLine(options: Options = { }) {
   // set log level
   if (options.verbose) {
     setLogLevel(options.verbose);
