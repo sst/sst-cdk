@@ -89,8 +89,7 @@ export async function sstSynth(options: Options = { }) {
  *
  * Used by deploy workflow.
  *
- * @param sstCdkOutputPath the path to cdk.out folder.
- * @param force always deploy stack even if templates are identical.
+ * @param options CLI options
  *
  * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deploying'  }
  */
@@ -104,7 +103,6 @@ export async function sstDeploy(options: Options = {}) {
     requireApproval: RequireApproval.Never,
     toolkitStackName,
     force: options.force,
-    sst: true,
     sstCdkOutputPath: options.sstCdkOutputPath,
     sstAsyncDeploy: true,
     sstSkipChangeset: true,

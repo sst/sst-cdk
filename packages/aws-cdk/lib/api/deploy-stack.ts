@@ -36,6 +36,7 @@ type TemplateBodyParameter = {
 export interface DeployStackResult {
   readonly noOp: boolean;
   readonly outputs: { [name: string]: string };
+  readonly exports: { [name: string]: string };
   readonly stackArn?: string;
   readonly stackArtifact: cxapi.CloudFormationStackArtifact;
   readonly stackEnv?: cxapi.Environment;
@@ -223,6 +224,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
     return {
       noOp: true,
       outputs: cloudFormationStack.outputs,
+      exports: cloudFormationStack.exports,
       stackArn: cloudFormationStack.stackId,
       stackArtifact,
       stackEnv,
@@ -275,7 +277,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
   if (!options.sstSkipChangeset && changeSet && changeSetDescription && changeSetHasNoChanges(changeSetDescription)) {
     debug('No changes are to be performed on %s.', deployName);
     await cfn.deleteChangeSet({ StackName: deployName, ChangeSetName: changeSetName }).promise();
-    return { noOp: true, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact, stackEnv };
+    return { noOp: true, outputs: cloudFormationStack.outputs, exports: cloudFormationStack.exports, stackArn: changeSet.StackId!, stackArtifact, stackEnv };
   }
 
   const execute = options.execute === undefined ? true : options.execute;
@@ -299,7 +301,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
         }).promise();
       } catch(e) {
         if (e.code === 'ValidationError' && e.message === 'No updates are to be performed.') {
-          return { noOp: true, outputs: cloudFormationStack.outputs, stackArtifact, stackEnv };
+          return { noOp: true, outputs: cloudFormationStack.outputs, exports: cloudFormationStack.exports, stackArtifact, stackEnv };
         }
         throw e;
       }
@@ -319,7 +321,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
     }
 
     if (options.sstAsyncDeploy) {
-      return { noOp: false, outputs: cloudFormationStack.outputs, stackArtifact, stackEnv };
+      return { noOp: false, outputs: cloudFormationStack.outputs, exports: cloudFormationStack.exports, stackArtifact, stackEnv };
     }
 
     // eslint-disable-next-line max-len
@@ -345,41 +347,8 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
   }
 
   return changeSet
-    ? { noOp: false, outputs: cloudFormationStack.outputs, stackArn: changeSet.StackId!, stackArtifact, stackEnv }
-    : { noOp: false, outputs: cloudFormationStack.outputs, stackArtifact, stackEnv };
-}
-
-/** @experimental */
-export async function deployStatus(options: DeployStackOptions): Promise<DeployStackResult> {
-  const stackArtifact = options.stack;
-  const stackEnv = options.resolvedEnvironment;
-  const cfn = options.sdk.cloudFormation();
-  const deployName = options.deployName || stackArtifact.stackName;
-  let cloudFormationStack = await CloudFormationStack.lookup(cfn, deployName);
-
-  const status = cloudFormationStack.stackStatus;
-  if (status.isInProgress) {
-    debug('Stack %s has an ongoing operation in progress and is not stable (%s)', deployName, status);
-    return {
-      noOp: true,
-      outputs: cloudFormationStack.outputs,
-      stackArn: cloudFormationStack.stackId,
-      stackArtifact,
-      stackEnv,
-    };
-  } else if (status.isCreationFailure) {
-    throw new Error(`The stack named ${deployName} failed creation, it may need to be manually deleted from the AWS console: ${status}`);
-  } else if ( ! status.isDeploySuccess) {
-    throw new Error(`The stack named ${deployName} failed to deploy: ${status}`);
-  }
-
-  return {
-    noOp: false,
-    outputs: cloudFormationStack.outputs,
-    stackArn: cloudFormationStack.stackId,
-    stackArtifact,
-    stackEnv,
-  };
+    ? { noOp: false, outputs: cloudFormationStack.outputs, exports: cloudFormationStack.exports, stackArn: changeSet.StackId!, stackArtifact, stackEnv }
+    : { noOp: false, outputs: cloudFormationStack.outputs, exports: cloudFormationStack.exports, stackArtifact, stackEnv };
 }
 
 /**

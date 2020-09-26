@@ -224,6 +224,7 @@ export class CdkToolkit {
             region: result.stackEnv?.region,
             status: result.noOp ? 'unchanged' : 'deploying',
             outputs: result.outputs,
+            exports: result.exports,
           };
           continue;
         }

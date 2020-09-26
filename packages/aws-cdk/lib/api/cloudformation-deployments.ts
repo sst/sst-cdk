@@ -4,7 +4,7 @@ import { Tag } from '../cdk-toolkit';
 import { debug } from '../logging';
 import { publishAssets } from '../util/asset-publishing';
 import { Mode, SdkProvider } from './aws-auth';
-import { deployStack, deployStatus, DeployStackResult, destroyStack, destroyStatus } from './deploy-stack';
+import { deployStack, DeployStackResult, destroyStack, destroyStatus } from './deploy-stack';
 import { ToolkitInfo } from './toolkit-info';
 import { CloudFormationStack, Template } from './util/cloudformation';
 
@@ -182,30 +182,6 @@ export class CloudFormationDeployments {
       ci: options.ci,
       sstAsyncDeploy: options.sstAsyncDeploy,
       sstSkipChangeset: options.sstSkipChangeset,
-    });
-  }
-
-  public async deployStatus(options: DeployStackOptions): Promise<DeployStackResult> {
-    const { stackSdk, resolvedEnvironment, cloudFormationRoleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
-
-    const toolkitInfo = await ToolkitInfo.lookup(resolvedEnvironment, stackSdk, options.toolkitStackName);
-
-    return deployStatus({
-      stack: options.stack,
-      resolvedEnvironment,
-      deployName: options.deployName,
-      notificationArns: options.notificationArns,
-      quiet: options.quiet,
-      sdk: stackSdk,
-      sdkProvider: this.sdkProvider,
-      roleArn: cloudFormationRoleArn,
-      reuseAssets: options.reuseAssets,
-      toolkitInfo,
-      tags: options.tags,
-      execute: options.execute,
-      force: options.force,
-      parameters: options.parameters,
-      usePreviousParameters: options.usePreviousParameters,
     });
   }
 

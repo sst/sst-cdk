@@ -187,6 +187,7 @@ class FakeCloudFormation extends CloudFormationDeployments {
       stackArn: `arn:aws:cloudformation:::stack/${options.stack.stackName}/MockedOut`,
       noOp: false,
       outputs: { StackName: options.stack.stackName },
+      exports: {},
       stackArtifact: options.stack,
     });
   }

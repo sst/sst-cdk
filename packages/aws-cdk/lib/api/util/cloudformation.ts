@@ -97,6 +97,20 @@ export class CloudFormationStack {
   }
 
   /**
+   * The stack's current exports
+   *
+   * Empty object if the stack doesn't exist
+   */
+  public get exports(): Record<string, string> {
+    if (!this.exists) { return {}; }
+    const result: { [name: string]: string } = {};
+    (this.stack!.Outputs || []).forEach(output => {
+      result[output.ExportName!] = output.OutputValue!;
+    });
+    return result;
+  }
+
+  /**
    * The stack's status
    *
    * Special status NOT_FOUND if the stack does not exist.

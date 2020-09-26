@@ -58,6 +58,7 @@ beforeEach(() => {
   cloudFormation.deployStack.mockImplementation((options) => Promise.resolve({
     noOp: true,
     outputs: {},
+    exports: {},
     stackArn: '',
     stackArtifact: options.stack,
   }));
