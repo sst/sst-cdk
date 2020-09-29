@@ -77,15 +77,6 @@ export class CdkToolkit {
     return stacks.firstStack.manifest.metadata ?? {};
   }
 
-  public async env() {
-    return {
-      environment: {
-        account: (await this.props.sdkProvider.defaultAccount())?.accountId,
-        region: this.props.sdkProvider.defaultRegion,
-      },
-    };
-  }
-
   public async diff(options: DiffOptions): Promise<number> {
     const stacks = await this.selectStacksForDiff(options.stackNames, options.exclusively);
 
@@ -311,7 +302,11 @@ export class CdkToolkit {
         });
 
         if (options.asyncDestroy) {
-          asyncResult = { status: result.status };
+          asyncResult = {
+            account: result.stackEnv?.account,
+            region: result.stackEnv?.region,
+            status: result.status,
+          };
           continue;
         }
 

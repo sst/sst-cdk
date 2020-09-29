@@ -149,9 +149,6 @@ export class CloudFormationDeployments {
     return stack.template();
   }
 
-  public async env() {
-  }
-
   public async deployStack(options: DeployStackOptions): Promise<DeployStackResult> {
     const { stackSdk, resolvedEnvironment, cloudFormationRoleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
 
@@ -186,12 +183,13 @@ export class CloudFormationDeployments {
   }
 
   public async destroyStack(options: DestroyStackOptions): Promise<any> {
-    const { stackSdk, cloudFormationRoleArn: roleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
+    const { stackSdk, resolvedEnvironment, cloudFormationRoleArn: roleArn } = await this.prepareSdkFor(options.stack, options.roleArn);
 
     return destroyStack({
       sdk: stackSdk,
       roleArn,
       stack: options.stack,
+      resolvedEnvironment,
       deployName: options.deployName,
       quiet: options.quiet,
       asyncDestroy: options.asyncDestroy,

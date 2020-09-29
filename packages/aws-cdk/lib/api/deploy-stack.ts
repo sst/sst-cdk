@@ -414,6 +414,7 @@ export interface DestroyStackOptions {
    */
   stack: cxapi.CloudFormationStackArtifact;
 
+  resolvedEnvironment: cxapi.Environment;
   sdk: ISDK;
   roleArn?: string;
   deployName?: string;
@@ -425,18 +426,19 @@ export interface DestroyStackOptions {
 export async function destroyStack(options: DestroyStackOptions): Promise<any> {
   const deployName = options.deployName || options.stack.stackName;
   const cfn = options.sdk.cloudFormation();
+  const stackEnv = options.resolvedEnvironment;
 
   const currentStack = await CloudFormationStack.lookup(cfn, deployName);
   if (!currentStack.exists) {
     return options.asyncDestroy
-      ? { status: 'destroyed' }
+      ? { status: 'destroyed', stackEnv }
       : undefined;
   }
 
   await cfn.deleteStack({ StackName: deployName, RoleARN: options.roleArn }).promise();
 
   if (options.asyncDestroy) {
-    return { status: 'destroying' };
+    return { status: 'destroying', stackEnv };
   }
   const monitor = options.quiet ? undefined : StackActivityMonitor.withDefaultPrinter(cfn, deployName, options.stack).start();
 
@@ -448,28 +450,6 @@ export async function destroyStack(options: DestroyStackOptions): Promise<any> {
   } finally {
     if (monitor) { await monitor.stop(); }
   }
-}
-
-/** @experimental */
-export async function destroyStatus(options: DestroyStackOptions) {
-  const deployName = options.deployName || options.stack.stackName;
-  const cfn = options.sdk.cloudFormation();
-
-  const currentStack = await CloudFormationStack.lookup(cfn, deployName);
-  if (!currentStack.exists) {
-    return { status: 'destroyed' };
-  }
-
-  const status = currentStack.stackStatus;
-  if (status.isInProgress) {
-    return { status: 'destroying' };
-  } else if (status.isDeleted) {
-    return { status: 'destroyed' };
-  } else if (status.name === 'DELETE_COMPLETE') {
-    return { status: 'destroyed' };
-  }
-
-  throw new Error(`Failed to destroy ${deployName}: ${status}`);
 }
 
 /**
