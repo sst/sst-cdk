@@ -172,13 +172,13 @@ export interface DeployStackOptions {
    * Start deploying and returns right away.
    * @default false
    */
-  sstAsyncDeploy?: boolean;
+  asyncDeploy?: boolean;
 
   /**
    * Start deploy without generating and applying changeset.
    * @default false
    */
-  sstSkipChangeset?: boolean;
+  skipChangeset?: boolean;
 }
 
 const LARGE_TEMPLATE_SIZE_KB = 50;
@@ -243,7 +243,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
   let changeSet;
   let changeSetDescription;
 
-  if (!options.sstSkipChangeset) {
+  if (!options.skipChangeset) {
     debug(`Attempting to create ChangeSet ${changeSetName} to ${update ? 'update' : 'create'} stack ${deployName}`);
     print('%s: creating CloudFormation changeset...', colors.bold(deployName));
     changeSet = await cfn.createChangeSet({
@@ -274,7 +274,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
     debug('Termination protection updated to %s for stack %s', terminationProtection, deployName);
   }
 
-  if (!options.sstSkipChangeset && changeSet && changeSetDescription && changeSetHasNoChanges(changeSetDescription)) {
+  if (!options.skipChangeset && changeSet && changeSetDescription && changeSetHasNoChanges(changeSetDescription)) {
     debug('No changes are to be performed on %s.', deployName);
     await cfn.deleteChangeSet({ StackName: deployName, ChangeSetName: changeSetName }).promise();
     return { noOp: true, outputs: cloudFormationStack.outputs, exports: cloudFormationStack.exports, stackArn: changeSet.StackId!, stackArtifact, stackEnv };
@@ -282,7 +282,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
 
   const execute = options.execute === undefined ? true : options.execute;
   if (execute) {
-    if (!options.sstSkipChangeset) {
+    if (!options.skipChangeset) {
       debug('Initiating execution of changeset %s on stack %s', changeSetName, deployName);
       await cfn.executeChangeSet({ StackName: deployName, ChangeSetName: changeSetName }).promise();
     }
@@ -320,7 +320,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
       }).promise();
     }
 
-    if (options.sstAsyncDeploy) {
+    if (options.asyncDeploy) {
       return { noOp: false, outputs: cloudFormationStack.outputs, exports: cloudFormationStack.exports, stackArtifact, stackEnv };
     }
 
@@ -418,7 +418,7 @@ export interface DestroyStackOptions {
   roleArn?: string;
   deployName?: string;
   quiet?: boolean;
-  sstAsyncDestroy?: boolean;
+  asyncDestroy?: boolean;
 }
 
 /** @experimental */
@@ -428,14 +428,14 @@ export async function destroyStack(options: DestroyStackOptions): Promise<any> {
 
   const currentStack = await CloudFormationStack.lookup(cfn, deployName);
   if (!currentStack.exists) {
-    return options.sstAsyncDestroy
+    return options.asyncDestroy
       ? { status: 'destroyed' }
       : undefined;
   }
 
   await cfn.deleteStack({ StackName: deployName, RoleARN: options.roleArn }).promise();
 
-  if (options.sstAsyncDestroy) {
+  if (options.asyncDestroy) {
     return { status: 'destroying' };
   }
   const monitor = options.quiet ? undefined : StackActivityMonitor.withDefaultPrinter(cfn, deployName, options.stack).start();

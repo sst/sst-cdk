@@ -100,13 +100,13 @@ export interface DeployStackOptions {
    * Start deploying and returns right away.
    * @default false
    */
-  sstAsyncDeploy?: boolean;
+  asyncDeploy?: boolean;
 
   /**
    * Start deploy without generating and applying changeset.
    * @default false
    */
-  sstSkipChangeset?: boolean;
+  skipChangeset?: boolean;
 }
 
 export interface DestroyStackOptions {
@@ -115,7 +115,7 @@ export interface DestroyStackOptions {
   roleArn?: string;
   quiet?: boolean;
   force?: boolean;
-  sstAsyncDestroy?: boolean;
+  asyncDestroy?: boolean;
 }
 
 export interface StackExistsOptions {
@@ -180,8 +180,8 @@ export class CloudFormationDeployments {
       parameters: options.parameters,
       usePreviousParameters: options.usePreviousParameters,
       ci: options.ci,
-      sstAsyncDeploy: options.sstAsyncDeploy,
-      sstSkipChangeset: options.sstSkipChangeset,
+      asyncDeploy: options.asyncDeploy,
+      skipChangeset: options.skipChangeset,
     });
   }
 
@@ -194,7 +194,7 @@ export class CloudFormationDeployments {
       stack: options.stack,
       deployName: options.deployName,
       quiet: options.quiet,
-      sstAsyncDestroy: options.sstAsyncDestroy,
+      asyncDestroy: options.asyncDestroy,
     });
   }
 

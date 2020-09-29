@@ -16,7 +16,6 @@ import { availableInitLanguages, cliInit, printAvailableTemplates } from '../lib
 import { data, debug, error, print, setLogLevel } from '../lib/logging';
 import { PluginHost } from '../lib/plugin';
 import { serializeStructure } from '../lib/serialize';
-import { sstList, sstBootstrap, sstSynth, sstDeploy, sstDestroy } from '../lib/serverless-stack';
 import { Configuration, Settings } from '../lib/settings';
 import * as version from '../lib/version';
 
@@ -107,18 +106,6 @@ async function parseCommandLineArguments() {
       .option('list', { type: 'boolean', desc: 'List the available templates' })
       .option('generate-only', { type: 'boolean', default: false, desc: 'If true, only generates project files, without executing additional operations such as setting up a git repo, installing dependencies or compiling the project' }),
     )
-    .command('sst-env', '')
-    .command('sst-list', '')
-    .command('sst-bootstrap', '')
-    .command('sst-synth', '')
-    .command('sst-deploy', '')
-    .command('sst-deploy-async', '', yargs => yargs
-      .option('output-path', { type: 'string', desc: 'Directory of synthesized cloud assembly', requiresArg: true })
-      .option('force', { alias: 'f', type: 'boolean', desc: 'Always deploy stack even if templates are identical', default: false }),
-    )
-    .command('sst-destroy [STACK]', '')
-    .command('sst-destroy-async [STACK]', '')
-    .command('sst-destroy-status [STACK]', '')
     .commandDir('../lib/commands', { exclude: /^_.*/ })
     .version(version.DISPLAY_VERSION)
     .demandCommand(1, '') // just print help
@@ -319,17 +306,6 @@ async function initCommandLine() {
         }
       case 'version':
         return data(version.DISPLAY_VERSION);
-
-      case 'sst-list':
-        return await sstList(argv);
-      case 'sst-bootstrap':
-        return await sstBootstrap(argv);
-      case 'sst-synth':
-        return await sstSynth(argv);
-      case 'sst-deploy':
-        return await sstDeploy({ ...argv });
-      case 'sst-destroy':
-        return await sstDestroy({ ...argv });
 
       default:
         throw new Error('Unknown command: ' + command);

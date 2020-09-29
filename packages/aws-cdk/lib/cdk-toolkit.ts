@@ -119,8 +119,8 @@ export class CdkToolkit {
 
   public async deploy(options: DeployOptions): Promise<any> {
     let stacks;
-    if (options.sstCdkOutputPath) {
-      const cxapiAssembly = new cxapi.CloudAssembly(options.sstCdkOutputPath);
+    if (options.cdkOutputPath) {
+      const cxapiAssembly = new cxapi.CloudAssembly(options.cdkOutputPath);
       const assembly = new CloudAssembly(cxapiAssembly);
       stacks = await assembly.selectStacks([options.stackNames[0]], {
         extend: ExtendedStackSelection.None,
@@ -171,7 +171,7 @@ export class CdkToolkit {
             fromDeploy: true,
           });
         }
-        if (options.sstAsyncDeploy) {
+        if (options.asyncDeploy) {
           asyncResult = { status: 'no_resources' };
         }
         continue;
@@ -214,11 +214,11 @@ export class CdkToolkit {
           parameters: Object.assign({}, parameterMap['*'], parameterMap[stack.stackName]),
           usePreviousParameters: options.usePreviousParameters,
           ci: options.ci,
-          sstAsyncDeploy: options.sstAsyncDeploy,
-          sstSkipChangeset: options.sstSkipChangeset,
+          asyncDeploy: options.asyncDeploy,
+          skipChangeset: options.skipChangeset,
         });
 
-        if (options.sstAsyncDeploy) {
+        if (options.asyncDeploy) {
           asyncResult = {
             account: result.stackEnv?.account,
             region: result.stackEnv?.region,
@@ -266,15 +266,15 @@ export class CdkToolkit {
       }
     }
 
-    if (options.sstAsyncDeploy) {
+    if (options.asyncDeploy) {
       return asyncResult;
     }
   }
 
   public async destroy(options: DestroyOptions): Promise<any> {
     let stacks;
-    if (options.sstCdkOutputPath) {
-      const cxapiAssembly = new cxapi.CloudAssembly(options.sstCdkOutputPath);
+    if (options.cdkOutputPath) {
+      const cxapiAssembly = new cxapi.CloudAssembly(options.cdkOutputPath);
       const assembly = new CloudAssembly(cxapiAssembly);
       stacks = await assembly.selectStacks([options.stackNames[0]], {
         extend: ExtendedStackSelection.None,
@@ -307,10 +307,10 @@ export class CdkToolkit {
           stack,
           deployName: stack.stackName,
           roleArn: options.roleArn,
-          sstAsyncDestroy: options.sstAsyncDestroy,
+          asyncDestroy: options.asyncDestroy,
         });
 
-        if (options.sstAsyncDestroy) {
+        if (options.asyncDestroy) {
           asyncResult = { status: result.status };
           continue;
         }
@@ -322,15 +322,15 @@ export class CdkToolkit {
       }
     }
 
-    if (options.sstAsyncDestroy) {
+    if (options.asyncDestroy) {
       return asyncResult;
     }
   }
 
-  public async list(selectors: string[], options: { long?: boolean, nonCli?: boolean, sstCdkOutputPath?: string } = { }) {
+  public async list(selectors: string[], options: { long?: boolean, nonCli?: boolean, cdkOutputPath?: string } = { }) {
     let stacks;
-    if (options.sstCdkOutputPath) {
-      const cxapiAssembly = new cxapi.CloudAssembly(options.sstCdkOutputPath);
+    if (options.cdkOutputPath) {
+      const cxapiAssembly = new cxapi.CloudAssembly(options.cdkOutputPath);
       const assembly = new CloudAssembly(cxapiAssembly);
       stacks = await assembly.selectStacks(selectors, { defaultBehavior: DefaultSelection.AllStacks });
     } else {
@@ -425,7 +425,7 @@ export class CdkToolkit {
    */
   public async bootstrap(
     environmentSpecs: string[], toolkitStackName: string | undefined, roleArn: string | undefined,
-    useNewBootstrapping: boolean, force: boolean | undefined, props: BootstrappingParameters, nonCli?: boolean, sstCdkOutputPath?: string): Promise<any> {
+    useNewBootstrapping: boolean, force: boolean | undefined, props: BootstrappingParameters, nonCli?: boolean, cdkOutputPath?: string): Promise<any> {
     // If there is an '--app' argument and an environment looks like a glob, we
     // select the environments from the app. Otherwise use what the user said.
 
@@ -434,7 +434,7 @@ export class CdkToolkit {
 
     // Partition into globs and non-globs (this will mutate environmentSpecs).
     const globSpecs = partition(environmentSpecs, looksLikeGlob);
-    if (globSpecs.length > 0 && !this.props.cloudExecutable.hasApp && !sstCdkOutputPath) {
+    if (globSpecs.length > 0 && !this.props.cloudExecutable.hasApp && !cdkOutputPath) {
       throw new Error(`'${globSpecs}' is not an environment name. Run in app directory to glob or specify an environment name like \'aws://123456789012/us-east-1\'.`);
     }
 
@@ -448,8 +448,8 @@ export class CdkToolkit {
     }
 
     // If this is called from Seed workflow
-    if (sstCdkOutputPath) {
-      const cxapiAssembly = new cxapi.CloudAssembly(sstCdkOutputPath);
+    if (cdkOutputPath) {
+      const cxapiAssembly = new cxapi.CloudAssembly(cdkOutputPath);
       const assembly = new CloudAssembly(cxapiAssembly);
       const stacks = await assembly.selectStacks([], { defaultBehavior: DefaultSelection.AllStacks });
       environments.push(...await globEnvironmentsFromStacks(stacks, globSpecs, this.props.sdkProvider));
@@ -716,19 +716,19 @@ export interface DeployOptions {
    * Path to pre-existing cdk.out
    * @default - cdk.out is auto-generated
    */
-  sstCdkOutputPath?: string;
+  cdkOutputPath?: string;
 
   /**
    * Start deploying and returns right away.
    * @default false
    */
-  sstAsyncDeploy?: boolean;
+  asyncDeploy?: boolean;
 
   /**
    * Start deploy without generating and applying changeset.
    * @default false
    */
-  sstSkipChangeset?: boolean;
+  skipChangeset?: boolean;
 }
 
 export interface DestroyOptions {
@@ -767,13 +767,13 @@ export interface DestroyOptions {
    * Path to pre-existing cdk.out
    * @default - cdk.out is auto-generated
    */
-  sstCdkOutputPath?: string;
+  cdkOutputPath?: string;
 
   /**
    * Start dpeloying and returns right away.
    * @default false
    */
-  sstAsyncDestroy?: boolean;
+  asyncDestroy?: boolean;
 }
 
 /**

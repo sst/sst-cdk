@@ -18,19 +18,19 @@ interface Options {
   // Command specific config
   readonly force?: boolean;
   readonly stackName?: string;
-  readonly sstCdkOutputPath?: string;
+  readonly cdkOutputPath?: string;
 }
 
 /**
  * Bootstrap and returns the boostrapped environment. Only returns 1 environment.
  *
- * @param options CLI options
+ * @param options CDK options
  *
  * @returns {
  *    environment: { account, region }
  *  }
  */
-export async function sstBootstrap(options: Options = { }) {
+export async function bootstrap(options: Options = { }) {
   const { cli } = await initCommandLine(options);
   const environmentSpecs:string[] = [];
   const toolkitStackName = undefined;
@@ -52,28 +52,26 @@ export async function sstBootstrap(options: Options = { }) {
 /**
  * List all stacks with dependencies.
  *
- * @param options CLI options
+ * @param options CDK options
  *
  * @returns { stacks: [{ id, name, dependencies }] }
  */
-export async function sstList(options: Options = { }) {
+export async function list(options: Options = { }) {
   const { cli } = await initCommandLine(options);
   return await cli.list([], {
     nonCli: true,
-    sstCdkOutputPath: options.sstCdkOutputPath,
+    cdkOutputPath: options.cdkOutputPath,
   });
 }
 
 /**
  * Synth all stacks, and returns synthesized stacks.
  *
- * Used by sst cli.
- *
- * @param options CLI options
+ * @param options CDK options
  *
  * @returns { stacks: [{ id, name }] }
  */
-export async function sstSynth(options: Options = { }) {
+export async function synth(options: Options = { }) {
   const { cli } = await initCommandLine(options);
   return await cli.synth([], false, {
     nonCli: true,
@@ -83,11 +81,11 @@ export async function sstSynth(options: Options = { }) {
 /**
  * Deploy all stacks in parallel asynchronously, and returns the environment deployed to and progress state.
  *
- * @param options CLI options
+ * @param options CDK options
  *
  * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deploying'  }
  */
-export async function sstDeploy(options: Options = {}) {
+export async function deploy(options: Options = {}) {
   process.env.CFN_QUICK_RETRY = 'true';
 
   const { cli, toolkitStackName } = await initCommandLine({ ...options, verbose: 4 });
@@ -97,27 +95,27 @@ export async function sstDeploy(options: Options = {}) {
     requireApproval: RequireApproval.Never,
     toolkitStackName,
     force: options.force,
-    sstCdkOutputPath: options.sstCdkOutputPath,
-    sstAsyncDeploy: true,
-    sstSkipChangeset: true,
+    cdkOutputPath: options.cdkOutputPath,
+    asyncDeploy: true,
+    skipChangeset: true,
   });
 }
 
 /**
  * Destroy a single stack exclusively or destroy all stacks, and returns destroyed stacks.
  *
- * @param options CLI options
+ * @param options CDK options
  *
  * @returns { stacks: [{ id, name }] }
  */
-export async function sstDestroy(options: Options = { }) {
+export async function destroy(options: Options = { }) {
   const { cli } = await initCommandLine(options);
   return await cli.destroy({
     stackNames: options.stackName ? [options.stackName] : [],
     exclusively: true,
     force: true,
-    sstCdkOutputPath: options.sstCdkOutputPath,
-    sstAsyncDestroy: true,
+    cdkOutputPath: options.cdkOutputPath,
+    asyncDestroy: true,
   });
 }
 
