@@ -88,7 +88,7 @@ export async function synth(options: Options = { }) {
 export async function deploy(options: Options = {}) {
   process.env.CFN_QUICK_RETRY = 'true';
 
-  const { cli, toolkitStackName } = await initCommandLine(options});
+  const { cli, toolkitStackName } = await initCommandLine(options);
   return await cli.deploy({
     stackNames: options.stackName ? [options.stackName] : [],
     exclusively: true,
