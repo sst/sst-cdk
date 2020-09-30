@@ -88,7 +88,7 @@ export async function synth(options: Options = { }) {
 export async function deploy(options: Options = {}) {
   process.env.CFN_QUICK_RETRY = 'true';
 
-  const { cli, toolkitStackName } = await initCommandLine({ ...options, verbose: 4 });
+  const { cli, toolkitStackName } = await initCommandLine(options});
   return await cli.deploy({
     stackNames: options.stackName ? [options.stackName] : [],
     exclusively: true,
@@ -109,6 +109,8 @@ export async function deploy(options: Options = {}) {
  * @returns { stacks: [{ id, name }] }
  */
 export async function destroy(options: Options = { }) {
+  process.env.CFN_QUICK_RETRY = 'true';
+
   const { cli } = await initCommandLine(options);
   return await cli.destroy({
     stackNames: options.stackName ? [options.stackName] : [],
