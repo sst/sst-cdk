@@ -46,6 +46,7 @@ export async function bootstrap(options: Options = { }) {
     force,
     { },
     nonCli,
+    options.cdkOutputPath,
   );
 }
 
