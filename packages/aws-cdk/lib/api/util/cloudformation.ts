@@ -104,9 +104,11 @@ export class CloudFormationStack {
   public get exports(): Record<string, string> {
     if (!this.exists) { return {}; }
     const result: { [name: string]: string } = {};
-    (this.stack!.Outputs || []).forEach(output => {
-      result[output.ExportName!] = output.OutputValue!;
-    });
+    (this.stack!.Outputs || [])
+      .filter(output => output.ExportName)
+      .forEach(output => {
+        result[output.ExportName!] = output.OutputValue!;
+      });
     return result;
   }
 
