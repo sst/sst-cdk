@@ -19,6 +19,7 @@ interface Options {
   readonly force?: boolean;
   readonly stackName?: string;
   readonly cdkOutputPath?: string;
+  readonly waitForCFUpdate?: boolean;
 }
 
 /**
@@ -97,7 +98,7 @@ export async function deploy(options: Options = {}) {
     toolkitStackName,
     force: options.force,
     cdkOutputPath: options.cdkOutputPath,
-    asyncDeploy: true,
+    asyncDeploy: ! options.waitForCFUpdate ? true : false,
     skipChangeset: true,
   });
 }
