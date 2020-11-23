@@ -1,181 +1,165 @@
 import * as child_process from 'child_process';
-import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { Code, Runtime } from '@aws-cdk/aws-lambda';
 import { AssetHashType, BundlingDockerImage } from '@aws-cdk/core';
 import { version as delayVersion } from 'delay/package.json';
-import { LocalBundler, Installer, LockFile } from '../lib/bundlers';
 import { Bundling } from '../lib/bundling';
 import * as util from '../lib/util';
 
 jest.mock('@aws-cdk/aws-lambda');
-const writeFileSyncMock = jest.spyOn(fs, 'writeFileSync').mockReturnValue();
-const existsSyncOriginal = fs.existsSync;
-const existsSyncMock = jest.spyOn(fs, 'existsSync');
-const originalFindUp = util.findUp;
-const findUpMock = jest.spyOn(util, 'findUp').mockImplementation((name: string, directory) => {
-  if (name === 'package.json') {
-    return path.join(__dirname, '..');
-  }
-  return originalFindUp(name, directory);
-});
-const fromAssetMock = jest.spyOn(BundlingDockerImage, 'fromAsset');
 
+// Mock BundlingDockerImage.fromAsset() to avoid building the image
+let fromAssetMock = jest.spyOn(BundlingDockerImage, 'fromAsset');
+let getEsBuildVersionMock = jest.spyOn(util, 'getEsBuildVersion');
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.resetAllMocks();
+  Bundling.clearRunsLocallyCache();
+  getEsBuildVersionMock.mockReturnValue('0.8.8');
+  fromAssetMock.mockReturnValue({
+    image: 'built-image',
+    cp: () => {},
+    run: () => {},
+    toJSON: () => 'built-image',
+  });
 });
 
-test('Parcel bundling', () => {
-  Bundling.parcel({
-    entry: '/project/folder/entry.ts',
+let depsLockFilePath = '/project/yarn.lock';
+let entry = '/project/lib/handler.ts';
+
+test('esbuild bundling in Docker', () => {
+  Bundling.bundle({
+    entry,
+    depsLockFilePath,
     runtime: Runtime.NODEJS_12_X,
-    cacheDir: 'cache-dir',
-    projectRoot: '/project',
-    parcelEnvironment: {
+    bundlingEnvironment: {
       KEY: 'value',
     },
+    loader: {
+      '.png': 'dataurl',
+    },
+    forceDockerBundling: true,
   });
 
-  // Correctly bundles with parcel
-  expect(Code.fromAsset).toHaveBeenCalledWith('/project', {
-    assetHashType: AssetHashType.BUNDLE,
+  // Correctly bundles with esbuild
+  expect(Code.fromAsset).toHaveBeenCalledWith(path.dirname(depsLockFilePath), {
+    assetHashType: AssetHashType.OUTPUT,
     bundling: expect.objectContaining({
-      local: {
-        props: expect.objectContaining({
-          projectRoot: '/project',
-        }),
-      },
       environment: {
         KEY: 'value',
       },
-      workingDirectory: '/asset-input/folder',
       command: [
         'bash', '-c',
-        [
-          '$(node -p "require.resolve(\'parcel\')") build /asset-input/folder/entry.ts --target cdk-lambda --dist-dir /asset-output --no-autoinstall --no-scope-hoist --cache-dir /asset-input/cache-dir',
-          'mv /asset-output/entry.js /asset-output/index.js',
-        ].join(' && '),
+        'npx esbuild --bundle /asset-input/lib/handler.ts --target=node12 --platform=node --outfile=/asset-output/index.js --external:aws-sdk --loader:.png=dataurl',
       ],
     }),
   });
-
-  // Correctly updates package.json
-  const call: any = writeFileSyncMock.mock.calls[0];
-  expect(call[0]).toMatch('package.json');
-  expect(JSON.parse(call[1])).toEqual(expect.objectContaining({
-    targets: {
-      'cdk-lambda': {
-        context: 'node',
-        includeNodeModules: {
-          'aws-sdk': false,
-        },
-        sourceMap: false,
-        minify: false,
-        engines: {
-          node: '>= 12',
-        },
-      },
-    },
-  }));
-
-  // Searches for the package.json starting in the directory of the entry file
-  expect(findUpMock).toHaveBeenCalledWith('package.json', '/project/folder');
 });
 
-test('Parcel bundling with handler named index.ts', () => {
-  Bundling.parcel({
-    entry: '/project/folder/index.ts',
+test('esbuild bundling with handler named index.ts', () => {
+  Bundling.bundle({
+    entry: '/project/lib/index.ts',
+    depsLockFilePath,
     runtime: Runtime.NODEJS_12_X,
-    projectRoot: '/project',
+    forceDockerBundling: true,
   });
 
-  // Correctly bundles with parcel
+  // Correctly bundles with esbuild
   expect(Code.fromAsset).toHaveBeenCalledWith('/project', {
-    assetHashType: AssetHashType.BUNDLE,
+    assetHashType: AssetHashType.OUTPUT,
     bundling: expect.objectContaining({
       command: [
         'bash', '-c',
-        '$(node -p "require.resolve(\'parcel\')") build /asset-input/folder/index.ts --target cdk-lambda --dist-dir /asset-output --no-autoinstall --no-scope-hoist',
+        'npx esbuild --bundle /asset-input/lib/index.ts --target=node12 --platform=node --outfile=/asset-output/index.js --external:aws-sdk',
       ],
     }),
   });
 });
 
-test('Parcel with Windows paths', () => {
-  Bundling.parcel({
-    entry: 'C:\\my-project\\lib\\entry.ts',
+test('esbuild bundling with tsx handler', () => {
+  Bundling.bundle({
+    entry: '/project/lib/handler.tsx',
+    depsLockFilePath,
     runtime: Runtime.NODEJS_12_X,
-    projectRoot: 'C:\\my-project',
+    forceDockerBundling: true,
   });
 
-  expect(Code.fromAsset).toHaveBeenCalledWith('C:\\my-project', expect.objectContaining({
+  // Correctly bundles with esbuild
+  expect(Code.fromAsset).toHaveBeenCalledWith('/project', {
+    assetHashType: AssetHashType.OUTPUT,
+    bundling: expect.objectContaining({
+      command: [
+        'bash', '-c',
+        'npx esbuild --bundle /asset-input/lib/handler.tsx --target=node12 --platform=node --outfile=/asset-output/index.js --external:aws-sdk',
+      ],
+    }),
+  });
+});
+
+test('esbuild with Windows paths', () => {
+  const osPlatformMock = jest.spyOn(os, 'platform').mockReturnValue('win32');
+
+  Bundling.bundle({
+    entry: 'C:\\my-project\\lib\\entry.ts',
+    runtime: Runtime.NODEJS_12_X,
+    depsLockFilePath: 'C:\\my-project\\package-lock.json',
+    forceDockerBundling: true,
+  });
+
+  expect(Code.fromAsset).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
     bundling: expect.objectContaining({
       command: expect.arrayContaining([
         expect.stringContaining('/lib/entry.ts'),
       ]),
     }),
   }));
+
+  osPlatformMock.mockRestore();
 });
 
-test('Parcel bundling with externals and dependencies', () => {
-  Bundling.parcel({
-    entry: '/project/folder/entry.ts',
+test('esbuild bundling with externals and dependencies', () => {
+  const packageLock = path.join(__dirname, '..', 'package-lock.json');
+  Bundling.bundle({
+    entry: __filename,
+    depsLockFilePath: packageLock,
     runtime: Runtime.NODEJS_12_X,
-    projectRoot: '/project',
     externalModules: ['abc'],
     nodeModules: ['delay'],
+    forceDockerBundling: true,
   });
 
-  // Correctly bundles with parcel
-  expect(Code.fromAsset).toHaveBeenCalledWith('/project', {
-    assetHashType: AssetHashType.BUNDLE,
+  // Correctly bundles with esbuild
+  expect(Code.fromAsset).toHaveBeenCalledWith(path.dirname(packageLock), {
+    assetHashType: AssetHashType.OUTPUT,
     bundling: expect.objectContaining({
       command: [
         'bash', '-c',
         [
-          '$(node -p "require.resolve(\'parcel\')") build /asset-input/folder/entry.ts --target cdk-lambda --dist-dir /asset-output --no-autoinstall --no-scope-hoist',
-          'mv /asset-output/entry.js /asset-output/index.js',
+          'npx esbuild --bundle /asset-input/test/bundling.test.js --target=node12 --platform=node --outfile=/asset-output/index.js --external:abc --external:delay',
           `echo \'{\"dependencies\":{\"delay\":\"${delayVersion}\"}}\' > /asset-output/package.json`,
+          'cp /asset-input/package-lock.json /asset-output/package-lock.json',
           'cd /asset-output',
           'npm install',
         ].join(' && '),
       ],
     }),
   });
-
-  // Correctly updates package.json
-  const call: any = writeFileSyncMock.mock.calls[0];
-  expect(call[0]).toMatch('package.json');
-  expect(JSON.parse(call[1])).toEqual(expect.objectContaining({
-    targets: expect.objectContaining({
-      'cdk-lambda': expect.objectContaining({
-        includeNodeModules: {
-          delay: false,
-          abc: false,
-        },
-      }),
-    }),
-  }));
 });
 
 test('Detects yarn.lock', () => {
-  existsSyncMock.mockImplementation((p: fs.PathLike) => {
-    if (/yarn.lock/.test(p.toString())) {
-      return true;
-    }
-    return existsSyncOriginal(p);
-  });
-
-  Bundling.parcel({
-    entry: '/project/folder/entry.ts',
+  const yarnLock = path.join(__dirname, '..', 'yarn.lock');
+  Bundling.bundle({
+    entry: __filename,
+    depsLockFilePath: yarnLock,
     runtime: Runtime.NODEJS_12_X,
-    projectRoot: '/project',
     nodeModules: ['delay'],
+    forceDockerBundling: true,
   });
 
-  // Correctly bundles with parcel
-  expect(Code.fromAsset).toHaveBeenCalledWith('/project', {
-    assetHashType: AssetHashType.BUNDLE,
+  // Correctly bundles with esbuild
+  expect(Code.fromAsset).toHaveBeenCalledWith(path.dirname(yarnLock), {
+    assetHashType: AssetHashType.OUTPUT,
     bundling: expect.objectContaining({
       command: expect.arrayContaining([
         expect.stringMatching(/yarn\.lock.+yarn install/),
@@ -185,17 +169,17 @@ test('Detects yarn.lock', () => {
 });
 
 test('with Docker build args', () => {
-  Bundling.parcel({
-    entry: '/project/folder/entry.ts',
+  Bundling.bundle({
+    entry,
+    depsLockFilePath,
     runtime: Runtime.NODEJS_12_X,
-    projectRoot: '/project',
     buildArgs: {
       HELLO: 'WORLD',
     },
     forceDockerBundling: true,
   });
 
-  expect(fromAssetMock).toHaveBeenCalledWith(expect.stringMatching(/parcel$/), expect.objectContaining({
+  expect(fromAssetMock).toHaveBeenCalledWith(expect.stringMatching(/lib$/), expect.objectContaining({
     buildArgs: expect.objectContaining({
       HELLO: 'WORLD',
     }),
@@ -212,72 +196,62 @@ test('Local bundling', () => {
     signal: null,
   });
 
-  const bundler = new LocalBundler({
-    installer: Installer.NPM,
-    projectRoot: '/project',
-    relativeEntryPath: 'folder/entry.ts',
-    dependencies: {
-      dep: 'version',
-    },
-    environment: {
+  const bundler = new Bundling({
+    entry,
+    depsLockFilePath,
+    runtime: Runtime.NODEJS_12_X,
+    bundlingEnvironment: {
       KEY: 'value',
     },
-    lockFile: LockFile.NPM,
   });
 
-  bundler.tryBundle('/outdir');
+  expect(bundler.local).toBeDefined();
+
+  const tryBundle = bundler.local?.tryBundle('/outdir', { image: Runtime.NODEJS_12_X.bundlingDockerImage });
+  expect(tryBundle).toBe(true);
 
   expect(spawnSyncMock).toHaveBeenCalledWith(
-    'bash', [
-      '-c',
-      [
-        '$(node -p \"require.resolve(\'parcel\')\") build /project/folder/entry.ts --target cdk-lambda --dist-dir /outdir --no-autoinstall --no-scope-hoist',
-        'mv /outdir/entry.js /outdir/index.js',
-        'echo \'{\"dependencies\":{\"dep\":\"version\"}}\' > /outdir/package.json',
-        'cp /project/package-lock.json /outdir/package-lock.json',
-        'cd /outdir',
-        'npm install',
-      ].join(' && '),
-    ],
+    'bash',
+    expect.arrayContaining(['-c', expect.stringContaining(entry)]),
     expect.objectContaining({
       env: expect.objectContaining({ KEY: 'value' }),
-      cwd: '/project/folder',
+      cwd: '/project/lib',
     }),
   );
 
   // Docker image is not built
   expect(fromAssetMock).not.toHaveBeenCalled();
+
+  spawnSyncMock.mockRestore();
 });
 
-test('LocalBundler.runsLocally checks parcel version and caches results', () => {
-  LocalBundler._runsLocally = undefined;
 
-  const spawnSyncMock = jest.spyOn(child_process, 'spawnSync').mockReturnValue({
-    status: 0,
-    stderr: Buffer.from('stderr'),
-    stdout: Buffer.from('2.0.0-beta.1'),
-    pid: 123,
-    output: ['stdout', 'stderr'],
-    signal: null,
+test('Incorrect esbuild version', () => {
+  getEsBuildVersionMock.mockReturnValueOnce('3.4.5');
+
+  const bundler = new Bundling({
+    entry,
+    depsLockFilePath,
+    runtime: Runtime.NODEJS_12_X,
   });
 
-  expect(LocalBundler.runsLocally).toBe(true);
-  expect(LocalBundler.runsLocally).toBe(true);
-  expect(spawnSyncMock).toHaveBeenCalledTimes(1);
-  expect(spawnSyncMock).toHaveBeenCalledWith(expect.stringContaining('parcel'), ['--version']);
+  const tryBundle = bundler.local?.tryBundle('/outdir', { image: Runtime.NODEJS_12_X.bundlingDockerImage });
+  expect(tryBundle).toBe(false);
 });
 
-test('LocalBundler.runsLocally with incorrect parcel version', () => {
-  LocalBundler._runsLocally = undefined;
-
-  jest.spyOn(child_process, 'spawnSync').mockReturnValue({
-    status: 0,
-    stderr: Buffer.from('stderr'),
-    stdout: Buffer.from('3.5.1'),
-    pid: 123,
-    output: ['stdout', 'stderr'],
-    signal: null,
+test('Custom bundling docker image', () => {
+  Bundling.bundle({
+    entry,
+    depsLockFilePath,
+    runtime: Runtime.NODEJS_12_X,
+    bundlingDockerImage: BundlingDockerImage.fromRegistry('my-custom-image'),
+    forceDockerBundling: true,
   });
 
-  expect(LocalBundler.runsLocally).toBe(false);
+  expect(Code.fromAsset).toHaveBeenCalledWith('/project', {
+    assetHashType: AssetHashType.OUTPUT,
+    bundling: expect.objectContaining({
+      image: { image: 'my-custom-image' },
+    }),
+  });
 });

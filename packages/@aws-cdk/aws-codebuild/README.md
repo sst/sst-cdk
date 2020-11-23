@@ -91,7 +91,10 @@ const gitHubSource = codebuild.Source.gitHub({
   repo: 'aws-cdk',
   webhook: true, // optional, default: true if `webhookFilters` were provided, false otherwise
   webhookFilters: [
-    codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH).andBranchIs('master'),
+    codebuild.FilterGroup
+      .inEventOf(codebuild.EventAction.PUSH)
+      .andBranchIs('master')
+      .andCommitMessageIs('the commit message'),
   ], // optional, by default all pushes and Pull Requests will trigger a build
 });
 ```
@@ -112,6 +115,18 @@ This source type can be used to build code from a BitBucket repository.
 const bbSource = codebuild.Source.bitBucket({
   owner: 'owner',
   repo: 'repo',
+});
+```
+
+### For all Git sources
+
+For all Git sources, you can fetch submodules while cloing git repo.
+
+```typescript
+const gitHubSource = codebuild.Source.gitHub({
+  owner: 'awslabs',
+  repo: 'aws-cdk',
+  fetchSubmodules: true,
 });
 ```
 
@@ -285,6 +300,38 @@ new codebuild.Project(this, 'Project', {
   environment: {
     buildImage: codebuild.LinuxGpuBuildImage.awsDeepLearningContainersImage(
       'tensorflow-inference', '2.1.0-gpu-py36-cu101-ubuntu18.04', '123456789012'),
+  },
+  ...
+})
+```
+
+## Logs
+
+CodeBuild lets you specify an S3 Bucket, CloudWatch Log Group or both to receive logs from your projects.
+
+By default, logs will go to cloudwatch.
+
+### CloudWatch Logs Example
+
+```typescript
+new codebuild.Project(this, 'Project', {
+  logging: {
+    cloudWatch: {
+      logGroup: new cloudwatch.LogGroup(this, `MyLogGroup`),
+    }
+  },
+  ...
+})
+```
+
+### S3 Logs Example
+
+```typescript
+new codebuild.Project(this, 'Project', {
+  logging: {
+    s3: {
+      bucket: new s3.Bucket(this, `LogBucket`)
+    }
   },
   ...
 })

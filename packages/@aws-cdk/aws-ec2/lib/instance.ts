@@ -1,7 +1,8 @@
 import * as crypto from 'crypto';
 import * as iam from '@aws-cdk/aws-iam';
 
-import { Construct, Duration, Fn, IResource, Lazy, Resource, Stack, Tags } from '@aws-cdk/core';
+import { Annotations, Duration, Fn, IResource, Lazy, Resource, Stack, Tags } from '@aws-cdk/core';
+import { Construct } from 'constructs';
 import { CloudFormationInit } from './cfn-init';
 import { Connections, IConnectable } from './connections';
 import { CfnInstance } from './ec2.generated';
@@ -323,8 +324,8 @@ export class Instance extends Resource implements IInstance {
     // use delayed evaluation
     const imageConfig = props.machineImage.getImage(this);
     this.userData = props.userData ?? imageConfig.userData;
-    const userDataToken = Lazy.stringValue({ produce: () => Fn.base64(this.userData.render()) });
-    const securityGroupsToken = Lazy.listValue({ produce: () => this.securityGroups.map(sg => sg.securityGroupId) });
+    const userDataToken = Lazy.string({ produce: () => Fn.base64(this.userData.render()) });
+    const securityGroupsToken = Lazy.list({ produce: () => this.securityGroups.map(sg => sg.securityGroupId) });
 
     const { subnets } = props.vpc.selectSubnets(props.vpcSubnets);
     let subnet;
@@ -333,13 +334,13 @@ export class Instance extends Resource implements IInstance {
       if (selected.length === 1) {
         subnet = selected[0];
       } else {
-        this.node.addError(`Need exactly 1 subnet to match AZ '${props.availabilityZone}', found ${selected.length}. Use a different availabilityZone.`);
+        Annotations.of(this).addError(`Need exactly 1 subnet to match AZ '${props.availabilityZone}', found ${selected.length}. Use a different availabilityZone.`);
       }
     } else {
       if (subnets.length > 0) {
         subnet = subnets[0];
       } else {
-        this.node.addError(`Did not find any subnets matching '${JSON.stringify(props.vpcSubnets)}', please use a different selection.`);
+        Annotations.of(this).addError(`Did not find any subnets matching '${JSON.stringify(props.vpcSubnets)}', please use a different selection.`);
       }
     }
     if (!subnet) {
@@ -384,7 +385,7 @@ export class Instance extends Resource implements IInstance {
 
     // Trigger replacement (via new logical ID) on user data change, if specified or cfn-init is being used.
     const originalLogicalId = Stack.of(this).getLogicalId(this.instance);
-    this.instance.overrideLogicalId(Lazy.stringValue({
+    this.instance.overrideLogicalId(Lazy.uncachedString({
       produce: () => {
         let logicalId = originalLogicalId;
         if (props.userDataCausesReplacement ?? props.initOptions) {
@@ -431,7 +432,7 @@ export class Instance extends Resource implements IInstance {
    * - Update the instance's CreationPolicy to wait for the `cfn-signal` commands.
    */
   private applyCloudFormationInit(init: CloudFormationInit, options: ApplyCloudFormationInitOptions = {}) {
-    init._attach(this.instance, {
+    init.attach(this.instance, {
       platform: this.osType,
       instanceRole: this.role,
       userData: this.userData,

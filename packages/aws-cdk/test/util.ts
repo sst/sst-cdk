@@ -70,7 +70,7 @@ export function testAssembly(assembly: TestAssembly): cxapi.CloudAssembly {
 
     builder.addArtifact(stack.stackName, {
       type: cxschema.ArtifactType.AWS_CLOUDFORMATION_STACK,
-      environment: stack.env || 'aws://12345/here',
+      environment: stack.env || 'aws://123456789012/here',
 
       dependencies: stack.depends,
       metadata,
@@ -159,4 +159,27 @@ export async function withMockedClassSingleton<A extends object, K extends keyof
   } finally {
     obj[key] = original;
   }
+}
+
+export function withMocked<A extends object, K extends keyof A, B>(obj: A, key: K, block: (fn: jest.Mocked<A>[K]) => B): B {
+  const original = obj[key];
+  const mockFn = jest.fn();
+  (obj as any)[key] = mockFn;
+
+  let asyncFinally: boolean = false;
+  try {
+    const ret = block(mockFn as any);
+    if (!isPromise(ret)) { return ret; }
+
+    asyncFinally = true;
+    return ret.finally(() => { obj[key] = original; }) as any;
+  } finally {
+    if (!asyncFinally) {
+      obj[key] = original;
+    }
+  }
+}
+
+function isPromise<A>(object: any): object is Promise<A> {
+  return Promise.resolve(object) === object;
 }

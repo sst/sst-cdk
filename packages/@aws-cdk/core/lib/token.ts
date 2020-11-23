@@ -1,4 +1,4 @@
-import { IConstruct } from './construct-compat';
+import { IConstruct } from 'constructs';
 import { Lazy } from './lazy';
 import { unresolved } from './private/encoding';
 import { Intrinsic } from './private/intrinsic';
@@ -179,7 +179,7 @@ export class Tokenization {
     // only convert numbers to strings so that Refs, conditions, and other things don't end up synthesizing as [object object]
 
     if (Token.isUnresolved(x)) {
-      return Lazy.stringValue({
+      return Lazy.uncachedString({
         produce: context => {
           const resolved = context.resolve(x);
           return typeof resolved !== 'number' ? resolved : `${resolved}`;

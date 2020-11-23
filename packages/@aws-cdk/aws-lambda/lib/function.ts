@@ -4,7 +4,8 @@ import * as ec2 from '@aws-cdk/aws-ec2';
 import * as iam from '@aws-cdk/aws-iam';
 import * as logs from '@aws-cdk/aws-logs';
 import * as sqs from '@aws-cdk/aws-sqs';
-import { CfnResource, Construct, Duration, Fn, Lazy, Stack } from '@aws-cdk/core';
+import { Annotations, CfnResource, Duration, Fn, Lazy, Names, Stack } from '@aws-cdk/core';
+import { Construct } from 'constructs';
 import { Code, CodeConfig } from './code';
 import { EventInvokeConfigOptions } from './event-invoke-config';
 import { IEventSource } from './event-source';
@@ -264,6 +265,22 @@ export interface FunctionOptions extends EventInvokeConfigOptions {
    * @default - default options as described in `VersionOptions`
    */
   readonly currentVersionOptions?: VersionOptions;
+
+  /**
+   * The filesystem configuration for the lambda function
+   *
+   * @default - will not mount any filesystem
+   */
+  readonly filesystem?: FileSystem;
+
+  /**
+   * Lambda Functions in a public subnet can NOT access the internet.
+   * Use this property to acknowledge this limitation and still place the function in a public subnet.
+   * @see https://stackoverflow.com/questions/52992085/why-cant-an-aws-lambda-function-inside-a-public-subnet-in-a-vpc-connect-to-the/52994841#52994841
+   *
+   * @default false
+   */
+  readonly allowPublicSubnet?: boolean;
 }
 
 export interface FunctionProps extends FunctionOptions {
@@ -292,22 +309,6 @@ export interface FunctionProps extends FunctionOptions {
    * the handler.
    */
   readonly handler: string;
-
-  /**
-   * The filesystem configuration for the lambda function
-   *
-   * @default - will not mount any filesystem
-   */
-  readonly filesystem?: FileSystem;
-
-  /**
-   * Lambda Functions in a public subnet can NOT access the internet.
-   * Use this property to acknowledge this limitation and still place the function in a public subnet.
-   * @see https://stackoverflow.com/questions/52992085/why-cant-an-aws-lambda-function-inside-a-public-subnet-in-a-vpc-connect-to-the/52994841#52994841
-   *
-   * @default false
-   */
-  readonly allowPublicSubnet?: boolean;
 }
 
 /**
@@ -347,8 +348,8 @@ export class Function extends FunctionBase {
     const cfn = this._currentVersion.node.defaultChild as CfnResource;
     const originalLogicalId = this.stack.resolve(cfn.logicalId) as string;
 
-    cfn.overrideLogicalId(Lazy.stringValue({
-      produce: _ => {
+    cfn.overrideLogicalId(Lazy.uncachedString({
+      produce: () => {
         const hash = calculateFunctionHash(this);
         const logicalId = trimFromStart(originalLogicalId, 255 - 32);
         return `${logicalId}${hash}`;
@@ -382,7 +383,7 @@ export class Function extends FunctionBase {
       public readonly role = role;
       public readonly permissionsNode = this.node;
 
-      protected readonly canCreatePermissions = false;
+      protected readonly canCreatePermissions = attrs.sameEnvironment ?? this._isStackAccount();
 
       constructor(s: Construct, i: string) {
         super(s, i);
@@ -598,12 +599,14 @@ export class Function extends FunctionBase {
         s3ObjectVersion: code.s3Location && code.s3Location.objectVersion,
         zipFile: code.inlineCode,
       },
-      layers: Lazy.listValue({ produce: () => this.layers.map(layer => layer.layerVersionArn) }, { omitEmpty: true }),
+      layers: Lazy.list({ produce: () => this.layers.map(layer => layer.layerVersionArn) }, { omitEmpty: true }),
       handler: props.handler,
       timeout: props.timeout && props.timeout.toSeconds(),
       runtime: props.runtime.name,
       role: this.role.roleArn,
-      environment: Lazy.anyValue({ produce: () => this.renderEnvironment() }),
+      // Uncached because calling '_checkEdgeCompatibility', which gets called in the resolve of another
+      // Token, actually *modifies* the 'environment' map.
+      environment: Lazy.uncachedAny({ produce: () => this.renderEnvironment() }),
       memorySize: props.memorySize,
       vpcConfig: this.configureVpc(props),
       deadLetterConfig: this.buildDeadLetterConfig(this.deadLetterQueue),
@@ -775,7 +778,7 @@ export class Function extends FunctionBase {
     for (const [key, config] of envEntries) {
       if (config.removeInEdge) {
         delete this.environment[key];
-        this.node.addInfo(`Removed ${key} environment variable for Lambda@Edge compatibility`);
+        Annotations.of(this).addInfo(`Removed ${key} environment variable for Lambda@Edge compatibility`);
       }
     }
     const envKeys = Object.keys(this.environment);
@@ -838,7 +841,7 @@ Environment variables can be marked for removal when used in Lambda@Edge by sett
     } else {
       const securityGroup = props.securityGroup || new ec2.SecurityGroup(this, 'SecurityGroup', {
         vpc: props.vpc,
-        description: 'Automatic security group for Lambda Function ' + this.node.uniqueId,
+        description: 'Automatic security group for Lambda Function ' + Names.uniqueId(this),
         allowAllOutbound: props.allowAllOutbound,
       });
       securityGroups = [securityGroup];

@@ -1,4 +1,4 @@
-import { ResourcePart } from '@aws-cdk/assert';
+import { ResourcePart, arrayWith } from '@aws-cdk/assert';
 import '@aws-cdk/assert/jest';
 import * as ec2 from '@aws-cdk/aws-ec2';
 import * as s3 from '@aws-cdk/aws-s3';
@@ -60,12 +60,12 @@ describe('tests', () => {
 
     // THEN
     expect(stack).toHaveResource('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-      LoadBalancerAttributes: [
+      LoadBalancerAttributes: arrayWith(
         {
           Key: 'load_balancing.cross_zone.enabled',
           Value: 'true',
         },
-      ],
+      ),
     });
   });
 
@@ -83,7 +83,7 @@ describe('tests', () => {
 
     // verify that the LB attributes reference the bucket
     expect(stack).toHaveResource('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-      LoadBalancerAttributes: [
+      LoadBalancerAttributes: arrayWith(
         {
           Key: 'access_logs.s3.enabled',
           Value: 'true',
@@ -92,7 +92,7 @@ describe('tests', () => {
           Key: 'access_logs.s3.bucket',
           Value: { Ref: 'AccessLoggingBucketA6D88F29' },
         },
-      ],
+      ),
     });
 
     // verify the bucket policy allows the ALB to put objects in the bucket
@@ -150,7 +150,7 @@ describe('tests', () => {
     // THEN
     // verify that the LB attributes reference the bucket
     expect(stack).toHaveResource('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-      LoadBalancerAttributes: [
+      LoadBalancerAttributes: arrayWith(
         {
           Key: 'access_logs.s3.enabled',
           Value: 'true',
@@ -163,7 +163,7 @@ describe('tests', () => {
           Key: 'access_logs.s3.prefix',
           Value: 'prefix-of-access-logs',
         },
-      ],
+      ),
     });
 
     // verify the bucket policy allows the ALB to put objects in the bucket
@@ -401,4 +401,64 @@ describe('tests', () => {
       Type: 'network',
     });
   });
+
+  describe('lookup', () => {
+    test('Can look up a NetworkLoadBalancer', () => {
+      // GIVEN
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'stack', {
+        env: {
+          account: '123456789012',
+          region: 'us-west-2',
+        },
+      });
+
+      // WHEN
+      const loadBalancer = elbv2.NetworkLoadBalancer.fromLookup(stack, 'a', {
+        loadBalancerTags: {
+          some: 'tag',
+        },
+      });
+
+      // THEN
+      expect(stack).not.toHaveResource('AWS::ElasticLoadBalancingV2::NetworkLoadBalancer');
+      expect(loadBalancer.loadBalancerArn).toEqual('arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/network/my-load-balancer/50dc6c495c0c9188');
+      expect(loadBalancer.loadBalancerCanonicalHostedZoneId).toEqual('Z3DZXE0EXAMPLE');
+      expect(loadBalancer.loadBalancerDnsName).toEqual('my-load-balancer-1234567890.us-west-2.elb.amazonaws.com');
+    });
+
+    test('Can add listeners to a looked-up NetworkLoadBalancer', () => {
+      // GIVEN
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'stack', {
+        env: {
+          account: '123456789012',
+          region: 'us-west-2',
+        },
+      });
+
+      const loadBalancer = elbv2.NetworkLoadBalancer.fromLookup(stack, 'a', {
+        loadBalancerTags: {
+          some: 'tag',
+        },
+      });
+
+      const targetGroup = new elbv2.NetworkTargetGroup(stack, 'tg', {
+        vpc: loadBalancer.vpc,
+        port: 3000,
+      });
+
+      // WHEN
+      loadBalancer.addListener('listener', {
+        protocol: elbv2.Protocol.TCP_UDP,
+        port: 3000,
+        defaultAction: elbv2.NetworkListenerAction.forward([targetGroup]),
+      });
+
+      // THEN
+      expect(stack).not.toHaveResource('AWS::ElasticLoadBalancingV2::NetworkLoadBalancer');
+      expect(stack).toHaveResource('AWS::ElasticLoadBalancingV2::Listener');
+    });
+  });
 });
+
