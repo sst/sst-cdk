@@ -89,7 +89,7 @@ export async function synth(options: Options = { }) {
  *
  * @param options CDK options
  *
- * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deploying'  }
+ * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deployed'  }
  */
 export async function deploy(options: Options = {}) {
   const { cli, toolkitStackName } = await initCommandLine(options);

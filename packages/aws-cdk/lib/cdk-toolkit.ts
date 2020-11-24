@@ -209,37 +209,40 @@ export class CdkToolkit {
           skipChangeset: options.skipChangeset,
         });
 
+        if ( ! options.asyncDeploy) {
+          const message = result.noOp
+            ? ' ✅  %s (no changes)'
+            : ' ✅  %s';
+
+          success('\n' + message, stack.displayName);
+
+          if (Object.keys(result.outputs).length > 0) {
+            print('\nOutputs:');
+
+            stackOutputs[stack.stackName] = result.outputs;
+          }
+
+          for (const name of Object.keys(result.outputs).sort()) {
+            const value = result.outputs[name];
+            print('%s.%s = %s', colors.cyan(stack.id), colors.cyan(name), colors.underline(colors.cyan(value)));
+          }
+
+          print('\nStack ARN:');
+
+          data(result.stackArn ?? 'Changeset not generated');
+        }
+
         if (options.nonCli) {
           nonCliRet = {
             account: result.stackEnv?.account,
             region: result.stackEnv?.region,
-            status: result.noOp ? 'unchanged' : 'deploying',
+            status: result.noOp
+              ? 'unchanged'
+              : (options.asyncDeploy ? 'deploying' : 'deployed'),
             outputs: result.outputs,
             exports: result.exports,
           };
-          continue;
         }
-
-        const message = result.noOp
-          ? ' ✅  %s (no changes)'
-          : ' ✅  %s';
-
-        success('\n' + message, stack.displayName);
-
-        if (Object.keys(result.outputs).length > 0) {
-          print('\nOutputs:');
-
-          stackOutputs[stack.stackName] = result.outputs;
-        }
-
-        for (const name of Object.keys(result.outputs).sort()) {
-          const value = result.outputs[name];
-          print('%s.%s = %s', colors.cyan(stack.id), colors.cyan(name), colors.underline(colors.cyan(value)));
-        }
-
-        print('\nStack ARN:');
-
-        data(result.stackArn ?? 'Changeset not generated');
       } catch (e) {
         error('\n ❌  %s failed: %s', colors.bold(stack.displayName), e);
         throw e;
@@ -301,16 +304,17 @@ export class CdkToolkit {
           asyncDestroy: options.asyncDestroy,
         });
 
+        if ( ! options.asyncDestroy) {
+          success(`\n ✅  %s: ${action}ed\n`, colors.blue(stack.displayName));
+        }
+
         if (options.nonCli) {
           nonCliRet = {
             account: result.stackEnv?.account,
             region: result.stackEnv?.region,
             status: result.status,
           };
-          continue;
         }
-
-        success(`\n ✅  %s: ${action}ed\n`, colors.blue(stack.displayName));
       } catch (e) {
         error(`\n ❌  %s: ${action} failed\n`, colors.blue(stack.displayName), e);
         throw e;
