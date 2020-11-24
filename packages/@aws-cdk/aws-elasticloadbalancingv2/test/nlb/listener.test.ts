@@ -3,6 +3,7 @@ import '@aws-cdk/assert/jest';
 import * as acm from '@aws-cdk/aws-certificatemanager';
 import * as ec2 from '@aws-cdk/aws-ec2';
 import * as cdk from '@aws-cdk/core';
+import * as constructs from 'constructs';
 import * as elbv2 from '../../lib';
 import { FakeSelfRegisteringTarget } from '../helpers';
 
@@ -106,6 +107,55 @@ describe('tests', () => {
       VpcId: { Ref: 'Stack8A423254' },
       Port: 9700,
       Protocol: 'TCP_UDP',
+      Targets: [
+        { Id: 'i-12345' },
+      ],
+    });
+  });
+
+  test('implicitly created target group but overrides inherited protocol', () => {
+    // GIVEN
+    const stack = new cdk.Stack();
+    const vpc = new ec2.Vpc(stack, 'Stack');
+    const lb = new elbv2.NetworkLoadBalancer(stack, 'LB', { vpc });
+    const cert = new acm.Certificate(stack, 'Certificate', {
+      domainName: 'example.com',
+    });
+
+    // WHEN
+    const listener = lb.addListener('Listener', {
+      port: 443,
+      protocol: elbv2.Protocol.TLS,
+      certificates: [elbv2.ListenerCertificate.fromCertificateManager(cert)],
+      sslPolicy: elbv2.SslPolicy.TLS12,
+    });
+
+    // WHEN
+    listener.addTargets('Targets', {
+      port: 80,
+      protocol: elbv2.Protocol.TCP,
+      targets: [new elbv2.InstanceTarget('i-12345')],
+    });
+
+    // THEN
+    expect(stack).toHaveResource('AWS::ElasticLoadBalancingV2::Listener', {
+      Protocol: 'TLS',
+      Port: 443,
+      Certificates: [
+        { CertificateArn: { Ref: 'Certificate4E7ABB08' } },
+      ],
+      SslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
+      DefaultActions: [
+        {
+          TargetGroupArn: { Ref: 'LBListenerTargetsGroup76EF81E8' },
+          Type: 'forward',
+        },
+      ],
+    });
+    expect(stack).toHaveResource('AWS::ElasticLoadBalancingV2::TargetGroup', {
+      VpcId: { Ref: 'Stack8A423254' },
+      Port: 80,
+      Protocol: 'TCP',
       Targets: [
         { Id: 'i-12345' },
       ],
@@ -338,10 +388,32 @@ describe('tests', () => {
       });
     }).toThrow(/Specify at most one/);
   });
+
+  test('Can look up an NetworkListener', () => {
+    // GIVEN
+    const app = new cdk.App();
+    const stack = new cdk.Stack(app, 'stack', {
+      env: {
+        account: '123456789012',
+        region: 'us-west-2',
+      },
+    });
+
+    // WHEN
+    const listener = elbv2.NetworkListener.fromLookup(stack, 'a', {
+      loadBalancerTags: {
+        some: 'tag',
+      },
+    });
+
+    // THEN
+    expect(stack).not.toHaveResource('AWS::ElasticLoadBalancingV2::Listener');
+    expect(listener.listenerArn).toEqual('arn:aws:elasticloadbalancing:us-west-2:123456789012:listener/network/my-load-balancer/50dc6c495c0c9188/f2f7dc8efc522ab2');
+  });
 });
 
 class ResourceWithLBDependency extends cdk.CfnResource {
-  constructor(scope: cdk.Construct, id: string, targetGroup: elbv2.ITargetGroup) {
+  constructor(scope: constructs.Construct, id: string, targetGroup: elbv2.ITargetGroup) {
     super(scope, id, { type: 'Test::Resource' });
     this.node.addDependency(targetGroup.loadBalancerAttached);
   }

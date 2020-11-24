@@ -2,6 +2,7 @@ import * as iam from '@aws-cdk/aws-iam';
 import * as secretsmanager from '@aws-cdk/aws-secretsmanager';
 import * as ssm from '@aws-cdk/aws-ssm';
 import * as cdk from '@aws-cdk/core';
+import { Construct } from 'constructs';
 import { NetworkMode, TaskDefinition } from './base/task-definition';
 import { ContainerImage, ContainerImageConfig } from './container-image';
 import { CfnTaskDefinition } from './ecs.generated';
@@ -355,6 +356,12 @@ export class ContainerDefinition extends cdk.Construct {
   public readonly logDriverConfig?: LogDriverConfig;
 
   /**
+   * Whether this container definition references a specific JSON field of a secret
+   * stored in Secrets Manager.
+   */
+  public readonly referencesSecretJsonField?: boolean;
+
+  /**
    * The configured container links
    */
   private readonly links = new Array<string>();
@@ -366,7 +373,7 @@ export class ContainerDefinition extends cdk.Construct {
   /**
    * Constructs a new instance of the ContainerDefinition class.
    */
-  constructor(scope: cdk.Construct, id: string, private readonly props: ContainerDefinitionProps) {
+  constructor(scope: Construct, id: string, private readonly props: ContainerDefinitionProps) {
     super(scope, id);
     if (props.memoryLimitMiB !== undefined && props.memoryReservationMiB !== undefined) {
       if (props.memoryLimitMiB < props.memoryReservationMiB) {
@@ -383,13 +390,12 @@ export class ContainerDefinition extends cdk.Construct {
     if (props.logging) {
       this.logDriverConfig = props.logging.bind(this, this);
     }
-    props.taskDefinition._linkContainer(this);
 
     if (props.secrets) {
       this.secrets = [];
       for (const [name, secret] of Object.entries(props.secrets)) {
-        if (this.taskDefinition.isFargateCompatible && secret.hasField) {
-          throw new Error(`Cannot specify secret JSON field for a task using the FARGATE launch type: '${name}' in container '${this.node.id}'`);
+        if (secret.hasField) {
+          this.referencesSecretJsonField = true;
         }
         secret.grantRead(this.taskDefinition.obtainExecutionRole());
         this.secrets.push({
@@ -398,6 +404,8 @@ export class ContainerDefinition extends cdk.Construct {
         });
       }
     }
+
+    props.taskDefinition._linkContainer(this);
   }
 
   /**

@@ -1,13 +1,18 @@
+/*
+export async function bootstrap() {
+}
+*/
+
 import * as colors from 'colors/safe';
+import { ToolkitInfo, BootstrapSource, Bootstrapper } from '../lib';
 import { SdkProvider } from './api/aws-auth';
 import { CloudFormationDeployments } from './api/cloudformation-deployments';
 import { CloudExecutable } from './api/cxapp/cloud-executable';
 import { execProgram } from './api/cxapp/exec';
-import { ToolkitInfo } from './api/toolkit-info';
 import { CdkToolkit } from './cdk-toolkit';
 import { RequireApproval } from './diff';
 import { setLogLevel } from './logging';
-import { Configuration } from './settings';
+import { Command, Configuration } from './settings';
 
 interface Options {
   // Generic config
@@ -34,18 +39,18 @@ interface Options {
 export async function bootstrap(options: Options = { }) {
   const { cli } = await initCommandLine(options);
   const environmentSpecs:string[] = [];
-  const toolkitStackName = undefined;
-  const roleArn = undefined;
-  const useNewBootstrapping = false;
-  const force = true;
   const nonCli = true;
+  const source: BootstrapSource = { source: 'default' };
+  const bootstrapper = new Bootstrapper(source);
+  const bootstrapOptions = {
+    toolkitStackName: undefined,
+    roleArn: undefined,
+    force: true,
+  };
   return await cli.bootstrap(
     environmentSpecs,
-    toolkitStackName,
-    roleArn,
-    useNewBootstrapping,
-    force,
-    { },
+    bootstrapper,
+    bootstrapOptions,
     nonCli,
     options.cdkOutputPath,
   );
@@ -134,9 +139,14 @@ async function initCommandLine(options: Options = { }) {
     colors.disable();
   }
 
-  const configuration = new Configuration({
+  const argv = {
     app: options.app,
     output: options.output,
+    _: [ 'list' ],
+  };
+  const configuration = new Configuration({
+    ...argv,
+    _: argv._ as [Command, ...string[]], // TypeScript at its best
   });
   await configuration.load();
 

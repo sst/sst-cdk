@@ -1,4 +1,5 @@
-import { Construct, IResource, Lazy, Resource } from '@aws-cdk/core';
+import { IResource, Lazy, Resource } from '@aws-cdk/core';
+import { Construct } from 'constructs';
 import { IGroup } from './group';
 import { CfnPolicy } from './iam.generated';
 import { PolicyDocument } from './policy-document';
@@ -82,6 +83,15 @@ export interface PolicyProps {
    * @default false
    */
   readonly force?: boolean;
+
+  /**
+   * Initial PolicyDocument to use for this Policy. If omited, any
+   * `PolicyStatement` provided in the `statements` property will be applied
+   * against the empty default `PolicyDocument`.
+   *
+   * @default - An empty policy.
+   */
+  readonly document?: PolicyDocument;
 }
 
 /**
@@ -135,6 +145,10 @@ export class Policy extends Resource implements IPolicy {
       protected shouldSynthesize() {
         return self.force || self.referenceTaken || (!self.document.isEmpty && self.isAttached);
       }
+    }
+
+    if (props.document) {
+      this.document = props.document;
     }
 
     const resource = new CfnPolicyConditional(this, 'Resource', {

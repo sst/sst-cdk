@@ -1,4 +1,5 @@
 ## Amazon Elastic Load Balancing V2 Construct Library
+
 <!--BEGIN STABILITY BANNER-->
 ---
 
@@ -60,6 +61,21 @@ listener.addTargets('ApplicationFleet', {
 
 The security groups of the load balancer and the target are automatically
 updated to allow the network traffic.
+
+One (or more) security groups can be associated with the load balancer;
+if a security group isn't provided, one will be automatically created.
+
+```ts
+const securityGroup1 = new ec2.SecurityGroup(stack, 'SecurityGroup1', { vpc });
+const lb = new elbv2.ApplicationLoadBalancer(this, 'LB', {
+  vpc,
+  internetFacing: true,
+  securityGroup: securityGroup1, // Optional - will be automatically created otherwise
+});
+
+const securityGroup2 = new ec2.SecurityGroup(stack, 'SecurityGroup2', { vpc });
+lb.addSecurityGroup(securityGroup2);
+```
 
 #### Conditions
 
@@ -150,6 +166,19 @@ listener.addAction('DefaultAction', {
   }),
 });
 ```
+
+If you just want to redirect all incoming traffic on one port to another port, you can use the following code:
+
+```ts
+lb.addRedirect({
+  sourceProtocol: elbv2.ApplicationProtocol.HTTPS,
+  sourcePort: 8443,
+  targetProtocol: elbv2.ApplicationProtocol.HTTP,
+  targetPort: 8080,
+});
+```
+
+If you do not provide any options for this method, it redirects HTTP port 80 to HTTPS port 443.
 
 ### Defining a Network Load Balancer
 
@@ -307,6 +336,7 @@ public attachToApplicationTargetGroup(targetGroup: ApplicationTargetGroup): Load
   };
 }
 ```
+
 `targetType` should be one of `Instance` or `Ip`. If the target can be
 directly added to the target group, `targetJson` should contain the `id` of
 the target (either instance ID or IP address depending on the type) and
@@ -325,4 +355,92 @@ case for ECS Services for example), take a resource dependency on
 // Make sure that the listener has been created, and so the TargetGroup
 // has been associated with the LoadBalancer, before 'resource' is created.
 resourced.addDependency(targetGroup.loadBalancerDependency());
+```
+
+## Looking up Load Balancers and Listeners
+
+You may look up load balancers and load balancer listeners by using one of the
+following lookup methods:
+
+- `ApplicationLoadBalancer.fromlookup(options)` - Look up an application load
+  balancer.
+- `ApplicationListener.fromLookup(options)` - Look up an application load
+  balancer listener.
+- `NetworkLoadBalancer.fromLookup(options)` - Look up a network load balancer.
+- `NetworkListener.fromLookup(options)` - Look up a network load balancer
+  listener.
+
+### Load Balancer lookup options
+
+You may look up a load balancer by ARN or by associated tags. When you look a
+load balancer up by ARN, that load balancer will be returned unless CDK detects
+that the load balancer is of the wrong type. When you look up a load balancer by
+tags, CDK will return the load balancer matching all specified tags. If more
+than one load balancer matches, CDK will throw an error requesting that you
+provide more specific criteria.
+
+**Look up a Application Load Balancer by ARN**
+```ts
+const loadBalancer = ApplicationLoadBalancer.fromLookup(stack, 'ALB', {
+  loadBalancerArn: YOUR_ALB_ARN,
+});
+```
+
+**Look up an Application Load Balancer by tags**
+```ts
+const loadBalancer = ApplicationLoadBalancer.fromLookup(stack, 'ALB', {
+  loadBalancerTags: {
+    // Finds a load balancer matching all tags.
+    some: 'tag',
+    someother: 'tag',
+  },
+});
+```
+
+## Load Balancer Listener lookup options
+
+You may look up a load balancer listener by the following criteria:
+
+- Associated load balancer ARN
+- Associated load balancer tags
+- Listener ARN
+- Listener port
+- Listener protocol
+
+The lookup method will return the matching listener. If more than one listener
+matches, CDK will throw an error requesting that you specify additional
+criteria.
+
+**Look up a Listener by associated Load Balancer, Port, and Protocol**
+
+```ts
+const listener = ApplicationListener.fromLookup(stack, 'ALBListener', {
+  loadBalancerArn: YOUR_ALB_ARN,
+  listenerProtocol: ApplicationProtocol.HTTPS,
+  listenerPort: 443,
+});
+```
+
+**Look up a Listener by associated Load Balancer Tag, Port, and Protocol**
+
+```ts
+const listener = ApplicationListener.fromLookup(stack, 'ALBListener', {
+  loadBalancerTags: {
+    Cluster: 'MyClusterName',
+  },
+  listenerProtocol: ApplicationProtocol.HTTPS,
+  listenerPort: 443,
+});
+```
+
+**Look up a Network Listener by associated Load Balancer Tag, Port, and Protocol**
+
+```ts
+const listener = NetworkListener.fromLookup(stack, 'ALBListener', {
+  loadBalancerTags: {
+    Cluster: 'MyClusterName',
+  },
+  listenerProtocol: Protocol.TCP,
+  listenerPort: 12345,
+});
 ```

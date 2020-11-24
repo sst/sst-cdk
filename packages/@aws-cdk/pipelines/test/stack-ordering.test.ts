@@ -1,6 +1,7 @@
 import { arrayWith, objectLike } from '@aws-cdk/assert';
 import '@aws-cdk/assert/jest';
-import { App, Construct, Stack, Stage, StageProps } from '@aws-cdk/core';
+import { App, Stack, Stage, StageProps } from '@aws-cdk/core';
+import { Construct } from 'constructs';
 import * as cdkp from '../lib';
 import { sortedByRunOrder } from './testmatchers';
 import { BucketStack, PIPELINE_ENV, TestApp, TestGitHubNpmPipeline } from './testutil';
@@ -77,6 +78,37 @@ test('manual approval is inserted in correct location', () => {
   });
 });
 
+test('extra space for sequential intermediary actions is reserved', () => {
+  // WHEN
+  pipeline.addApplicationStage(new TwoStackApp(app, 'MyApp'), {
+    extraRunOrderSpace: 1,
+  });
+
+  // THEN
+  expect(pipelineStack).toHaveResourceLike('AWS::CodePipeline::Pipeline', {
+    Stages: arrayWith({
+      Name: 'MyApp',
+      Actions: sortedByRunOrder([
+        objectLike({
+          Name: 'Stack1.Prepare',
+          RunOrder: 1,
+        }),
+        objectLike({
+          Name: 'Stack1.Deploy',
+          RunOrder: 3,
+        }),
+        objectLike({
+          Name: 'Stack2.Prepare',
+          RunOrder: 4,
+        }),
+        objectLike({
+          Name: 'Stack2.Deploy',
+          RunOrder: 6,
+        }),
+      ]),
+    }),
+  });
+});
 
 class TwoStackApp extends Stage {
   constructor(scope: Construct, id: string, props?: StageProps) {

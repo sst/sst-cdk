@@ -24,7 +24,8 @@ test('minimal example renders correctly', () => {
   expect(stack).toHaveResource('AWS::CloudFront::Distribution', {
     DistributionConfig: {
       DefaultCacheBehavior: {
-        ForwardedValues: { QueryString: false },
+        CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+        Compress: true,
         TargetOriginId: 'StackMyDistOrigin1D6D5E535',
         ViewerProtocolPolicy: 'allow-all',
       },
@@ -67,7 +68,8 @@ test('exhaustive example of props renders correctly', () => {
     DistributionConfig: {
       Aliases: ['example.com'],
       DefaultCacheBehavior: {
-        ForwardedValues: { QueryString: false },
+        CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+        Compress: true,
         TargetOriginId: 'StackMyDistOrigin1D6D5E535',
         ViewerProtocolPolicy: 'allow-all',
       },
@@ -132,13 +134,15 @@ describe('multiple behaviors', () => {
     expect(stack).toHaveResource('AWS::CloudFront::Distribution', {
       DistributionConfig: {
         DefaultCacheBehavior: {
-          ForwardedValues: { QueryString: false },
+          CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+          Compress: true,
           TargetOriginId: 'StackMyDistOrigin1D6D5E535',
           ViewerProtocolPolicy: 'allow-all',
         },
         CacheBehaviors: [{
+          CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+          Compress: true,
           PathPattern: 'api/*',
-          ForwardedValues: { QueryString: false },
           TargetOriginId: 'StackMyDistOrigin1D6D5E535',
           ViewerProtocolPolicy: 'allow-all',
         }],
@@ -169,13 +173,15 @@ describe('multiple behaviors', () => {
     expect(stack).toHaveResource('AWS::CloudFront::Distribution', {
       DistributionConfig: {
         DefaultCacheBehavior: {
-          ForwardedValues: { QueryString: false },
+          CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+          Compress: true,
           TargetOriginId: 'StackMyDistOrigin1D6D5E535',
           ViewerProtocolPolicy: 'allow-all',
         },
         CacheBehaviors: [{
+          CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+          Compress: true,
           PathPattern: 'api/*',
-          ForwardedValues: { QueryString: false },
           TargetOriginId: 'StackMyDistOrigin20B96F3AD',
           ViewerProtocolPolicy: 'allow-all',
         }],
@@ -214,19 +220,22 @@ describe('multiple behaviors', () => {
     expect(stack).toHaveResource('AWS::CloudFront::Distribution', {
       DistributionConfig: {
         DefaultCacheBehavior: {
-          ForwardedValues: { QueryString: false },
+          CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+          Compress: true,
           TargetOriginId: 'StackMyDistOrigin1D6D5E535',
           ViewerProtocolPolicy: 'allow-all',
         },
         CacheBehaviors: [{
+          CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+          Compress: true,
           PathPattern: 'api/1*',
-          ForwardedValues: { QueryString: false },
           TargetOriginId: 'StackMyDistOrigin20B96F3AD',
           ViewerProtocolPolicy: 'allow-all',
         },
         {
+          CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+          Compress: true,
           PathPattern: 'api/2*',
-          ForwardedValues: { QueryString: false },
           TargetOriginId: 'StackMyDistOrigin1D6D5E535',
           ViewerProtocolPolicy: 'allow-all',
         }],
@@ -468,6 +477,7 @@ describe('with Lambda@Edge functions', () => {
           {
             functionVersion: lambdaFunction.currentVersion,
             eventType: LambdaEdgeEventType.ORIGIN_REQUEST,
+            includeBody: true,
           },
         ],
       },
@@ -479,12 +489,49 @@ describe('with Lambda@Edge functions', () => {
           LambdaFunctionAssociations: [
             {
               EventType: 'origin-request',
+              IncludeBody: true,
               LambdaFunctionARN: {
                 Ref: 'FunctionCurrentVersion4E2B2261477a5ae8059bbaa7813f752292c0f65e',
               },
             },
           ],
         },
+      },
+    });
+  });
+
+  test('edgelambda.amazonaws.com is added to the trust policy of lambda', () => {
+    new Distribution(stack, 'MyDist', {
+      defaultBehavior: {
+        origin,
+        edgeLambdas: [
+          {
+            functionVersion: lambdaFunction.currentVersion,
+            eventType: LambdaEdgeEventType.ORIGIN_REQUEST,
+          },
+        ],
+      },
+    });
+
+    expect(stack).toHaveResource('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: {
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'lambda.amazonaws.com',
+            },
+          },
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'edgelambda.amazonaws.com',
+            },
+          },
+        ],
+        Version: '2012-10-17',
       },
     });
   });

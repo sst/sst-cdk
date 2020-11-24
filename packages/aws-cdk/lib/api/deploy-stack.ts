@@ -10,8 +10,8 @@ import { publishAssets } from '../util/asset-publishing';
 import { contentHash } from '../util/content-hash';
 import { ISDK, SdkProvider } from './aws-auth';
 import { ToolkitInfo } from './toolkit-info';
-import { changeSetHasNoChanges, CloudFormationStack, StackParameters, TemplateParameters, waitForChangeSet, waitForStackDeploy, waitForStackDelete } from './util/cloudformation';
-import { StackActivityMonitor } from './util/cloudformation/stack-activity-monitor';
+import { changeSetHasNoChanges, CloudFormationStack, TemplateParameters, waitForChangeSet, waitForStackDeploy, waitForStackDelete } from './util/cloudformation';
+import { StackActivityMonitor, StackActivityProgress } from './util/cloudformation/stack-activity-monitor';
 
 // We need to map regions to domain suffixes, and the SDK already has a function to do this.
 // It's not part of the public API, but it's also unlikely to go away.
@@ -151,9 +151,17 @@ export interface DeployStackOptions {
    *
    * If not set, all parameters must be specified for every deployment.
    *
-   * @default true
+   * @default false
    */
   usePreviousParameters?: boolean;
+
+  /**
+   * Display mode for stack deployment progress.
+   *
+   * @default StackActivityProgress.Bar stack events will be displayed for
+   *   the resource currently being deployed.
+   */
+  progress?: StackActivityProgress;
 
   /**
    * Deploy even if the deployed template is identical to the one we are about to deploy.
@@ -216,10 +224,10 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
 
   const templateParams = TemplateParameters.fromTemplate(stackArtifact.template);
   const stackParams = options.usePreviousParameters
-    ? templateParams.diff(finalParameterValues, cloudFormationStack.parameters)
-    : templateParams.toStackParameters(finalParameterValues);
+    ? templateParams.updateExisting(finalParameterValues, cloudFormationStack.parameters)
+    : templateParams.supplyAll(finalParameterValues);
 
-  if (await canSkipDeploy(options, cloudFormationStack, stackParams)) {
+  if (await canSkipDeploy(options, cloudFormationStack, stackParams.hasChanges(cloudFormationStack.parameters))) {
     debug(`${deployName}: skipping deployment (use --force to override)`);
     return {
       noOp: true,
@@ -277,7 +285,14 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
   if (!options.skipChangeset && changeSet && changeSetDescription && changeSetHasNoChanges(changeSetDescription)) {
     debug('No changes are to be performed on %s.', deployName);
     await cfn.deleteChangeSet({ StackName: deployName, ChangeSetName: changeSetName }).promise();
-    return { noOp: true, outputs: cloudFormationStack.outputs, exports: cloudFormationStack.exports, stackArn: changeSet.StackId!, stackArtifact, stackEnv };
+    return {
+      noOp: true,
+      outputs: cloudFormationStack.outputs,
+      exports: cloudFormationStack.exports,
+      stackArn: changeSet.StackId!,
+      stackArtifact,
+      stackEnv,
+    };
   }
 
   const execute = options.execute === undefined ? true : options.execute;
@@ -285,8 +300,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
     if (!options.skipChangeset) {
       debug('Initiating execution of changeset %s on stack %s', changeSetName, deployName);
       await cfn.executeChangeSet({ StackName: deployName, ChangeSetName: changeSetName }).promise();
-    }
-    else if (update) {
+    } else if (update) {
       debug('Initiating updating of stack %s', deployName);
       try {
         await cfn.updateStack({
@@ -299,14 +313,13 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
           Capabilities: ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'],
           Tags: options.tags,
         }).promise();
-      } catch(e) {
+      } catch (e) {
         if (e.code === 'ValidationError' && e.message === 'No updates are to be performed.') {
           return { noOp: true, outputs: cloudFormationStack.outputs, exports: cloudFormationStack.exports, stackArtifact, stackEnv };
         }
         throw e;
       }
-    }
-    else {
+    } else {
       debug('Initiating creation of stack %s', deployName);
       await cfn.createStack({
         StackName: deployName,
@@ -325,12 +338,11 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
     }
 
     // eslint-disable-next-line max-len
-    const monitor = options.quiet || ! changeSetDescription
-      ? undefined
-      : StackActivityMonitor.withDefaultPrinter(cfn, deployName, stackArtifact, {
-        resourcesTotal: (changeSetDescription.Changes ?? []).length,
-        changeSetCreationTime: changeSetDescription.CreationTime,
-      }).start();
+    const monitor = options.quiet || ! changeSetDescription ? undefined : StackActivityMonitor.withDefaultPrinter(cfn, deployName, stackArtifact, {
+      resourcesTotal: (changeSetDescription.Changes ?? []).length,
+      progress: options.progress,
+      changeSetCreationTime: changeSetDescription.CreationTime,
+    }).start();
     debug('Execution of changeset %s on stack %s has started; waiting for the update to complete...', changeSetName, deployName);
     try {
       const finalStack = await waitForStackDeploy(cfn, deployName);
@@ -347,8 +359,21 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
   }
 
   return changeSet
-    ? { noOp: false, outputs: cloudFormationStack.outputs, exports: cloudFormationStack.exports, stackArn: changeSet.StackId!, stackArtifact, stackEnv }
-    : { noOp: false, outputs: cloudFormationStack.outputs, exports: cloudFormationStack.exports, stackArtifact, stackEnv };
+    ? {
+      noOp: false,
+      outputs: cloudFormationStack.outputs,
+      exports: cloudFormationStack.exports,
+      stackArn: changeSet.StackId!,
+      stackArtifact,
+      stackEnv,
+    }
+    : {
+      noOp: false,
+      outputs: cloudFormationStack.outputs,
+      exports: cloudFormationStack.exports,
+      stackArtifact,
+      stackEnv,
+    };
 }
 
 /**
@@ -464,7 +489,7 @@ export async function destroyStack(options: DestroyStackOptions): Promise<any> {
 async function canSkipDeploy(
   deployStackOptions: DeployStackOptions,
   cloudFormationStack: CloudFormationStack,
-  params: StackParameters): Promise<boolean> {
+  parameterChanges: boolean): Promise<boolean> {
 
   const deployName = deployStackOptions.deployName || deployStackOptions.stack.stackName;
   debug(`${deployName}: checking if we can skip deploy`);
@@ -500,8 +525,14 @@ async function canSkipDeploy(
   }
 
   // Parameters have changed
-  if (params.changed) {
+  if (parameterChanges) {
     debug(`${deployName}: parameters have changed`);
+    return false;
+  }
+
+  // Existing stack is in a failed state
+  if (cloudFormationStack.stackStatus.isFailure) {
+    debug(`${deployName}: stack is in a failure state`);
     return false;
   }
 

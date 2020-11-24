@@ -5,6 +5,8 @@ import { Runtime } from '@aws-cdk/aws-lambda';
 import * as cdk from '@aws-cdk/core';
 import { exec } from './util';
 
+const PARCEL_VERSION = '2.0.0-beta.1';
+
 interface BundlerProps {
   relativeEntryPath: string;
   cacheDir?: string;
@@ -22,28 +24,36 @@ interface LocalBundlerProps extends BundlerProps {
  * Local Parcel bundler
  */
 export class LocalBundler implements cdk.ILocalBundling {
-  public static get runsLocally(): boolean {
-    if (LocalBundler._runsLocally !== undefined) {
-      return LocalBundler._runsLocally;
+  public static runsLocally(resolvePath: string): boolean {
+    if (LocalBundler._runsLocally[resolvePath] !== undefined) {
+      return LocalBundler._runsLocally[resolvePath];
     }
     if (os.platform() === 'win32') { // TODO: add Windows support
       return false;
     }
     try {
-      const parcel = spawnSync(require.resolve('parcel'), ['--version']);
-      LocalBundler._runsLocally = /^2/.test(parcel.stdout.toString().trim()); // Cache result to avoid unnecessary spawns
-      return LocalBundler._runsLocally;
-    } catch {
+      const parcel = spawnSync(require.resolve('parcel', { paths: [resolvePath] }), ['--version']);
+      const version = parcel.stdout.toString().trim();
+      LocalBundler._runsLocally[resolvePath] = new RegExp(`^${PARCEL_VERSION}`).test(version); // Cache result to avoid unnecessary spawns
+      if (!LocalBundler._runsLocally[resolvePath]) {
+        process.stderr.write(`Incorrect parcel version detected: ${version} <> ${PARCEL_VERSION}. Switching to Docker bundling.\n`);
+      }
+      return LocalBundler._runsLocally[resolvePath];
+    } catch (err) {
       return false;
     }
   }
 
-  private static _runsLocally?: boolean;
+  public static clearRunsLocallyCache(): void { // for tests
+    LocalBundler._runsLocally = {};
+  }
+
+  private static _runsLocally: { [key: string]: boolean } = {};
 
   constructor(private readonly props: LocalBundlerProps) {}
 
   public tryBundle(outputDir: string) {
-    if (!LocalBundler.runsLocally) {
+    if (!LocalBundler.runsLocally(this.props.projectRoot)) {
       return false;
     }
 
@@ -55,6 +65,7 @@ export class LocalBundler implements cdk.ILocalBundling {
       dependencies: this.props.dependencies,
       installer: this.props.installer,
       lockFile: this.props.lockFile,
+      bundlingEnvironment: BundlingEnvironment.LOCAL,
     });
 
     exec('bash', ['-c', localCommand], {
@@ -71,6 +82,7 @@ export class LocalBundler implements cdk.ILocalBundling {
 }
 
 interface DockerBundlerProps extends BundlerProps {
+  bundlingDockerImage?: cdk.BundlingDockerImage;
   buildImage?: boolean;
   buildArgs?: { [key: string]: string };
   runtime: Runtime;
@@ -85,11 +97,11 @@ export class DockerBundler {
 
   constructor(props: DockerBundlerProps) {
     const image = props.buildImage
-      ? cdk.BundlingDockerImage.fromAsset(path.join(__dirname, '../parcel'), {
+      ? props.bundlingDockerImage ?? cdk.BundlingDockerImage.fromAsset(path.join(__dirname, '../parcel'), {
         buildArgs: {
           ...props.buildArgs ?? {},
           IMAGE: props.runtime.bundlingDockerImage.image,
-          PARCEL_VERSION: props.parcelVersion ?? '2.0.0-beta.1',
+          PARCEL_VERSION: props.parcelVersion ?? PARCEL_VERSION,
         },
       })
       : cdk.BundlingDockerImage.fromRegistry('dummy'); // Do not build if we don't need to
@@ -102,6 +114,7 @@ export class DockerBundler {
       installer: props.installer,
       lockFile: props.lockFile,
       dependencies: props.dependencies,
+      bundlingEnvironment: BundlingEnvironment.DOCKER,
     });
 
     this.bundlingOptions = {
@@ -115,6 +128,12 @@ export class DockerBundler {
 
 interface BundlingCommandOptions extends LocalBundlerProps {
   outputDir: string;
+  bundlingEnvironment: BundlingEnvironment;
+}
+
+enum BundlingEnvironment {
+  DOCKER = 'docker',
+  LOCAL = 'local',
 }
 
 /**
@@ -122,10 +141,14 @@ interface BundlingCommandOptions extends LocalBundlerProps {
  */
 function createBundlingCommand(options: BundlingCommandOptions): string {
   const entryPath = path.join(options.projectRoot, options.relativeEntryPath);
-  const distFile = path.basename(options.relativeEntryPath).replace(/\.ts$/, '.js');
+  const distFile = path.basename(options.relativeEntryPath).replace(/\.(jsx|tsx?)$/, '.js');
+  const parcelResolvePath = options.bundlingEnvironment === BundlingEnvironment.DOCKER
+    ? '/' // Force using parcel installed at / in the image
+    : entryPath; // Look up starting from entry path
+
   const parcelCommand: string = chain([
     [
-      '$(node -p "require.resolve(\'parcel\')")', // Parcel is not globally installed, find its "bin"
+      `$(node -p "require.resolve(\'parcel\', { paths: ['${parcelResolvePath}'] })")`, // Parcel is not globally installed, find its "bin"
       'build', entryPath.replace(/\\/g, '/'), // Always use POSIX paths in the container
       '--target', 'cdk-lambda',
       '--dist-dir', options.outputDir, // Output bundle in outputDir (will have the same name as the entry)
