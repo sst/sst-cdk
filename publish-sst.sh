@@ -11,16 +11,17 @@ if ( ! package || ! [ 'sst-cdk', 'test-cdk' ].includes(package)) {
   return;
 }
 
-// Generate new version
-const cdkVersion = JSON.parse(readFileSync('lerna.json')).version;
+// Get forked AWS CDK version
+execSync(`scripts/align-version.sh`);
+const cdkVersion = JSON.parse(readFileSync('package.json')).version;
 
+// Generate new version
 const prevForkVersion = execSync(`npm show ${package} version`).toString().trim();
 const prevCdkVersion = prevForkVersion.split('-')[0];
 const prevRevision = prevForkVersion.split('.').pop();
 const revision = prevCdkVersion === cdkVersion
   ? parseInt(prevRevision) + 1
   : 1;
-
 const forkVersion = `${cdkVersion}-rc.${revision}`;
 
 // Tag
@@ -29,7 +30,6 @@ if (package === 'sst-cdk') {
 }
 
 // Publish
-execSync(`scripts/align-version.sh`);
 execSync(`cd packages/aws-cdk && sed -i '' "s/\\"name\\": \\"aws-cdk\\"/\\"name\\": \\"${package}\\"/g" package.json`);
 execSync(`cd packages/aws-cdk && sed -i '' "s/github.com\\/aws\\/aws-cdk/github.com\\/serverless-stack\\/${package}/g" package.json`);
 execSync(`cd packages/aws-cdk && sed -i '' "s/\\"version\\": \\"${cdkVersion}\\"/\\"version\\": \\"${forkVersion}\\"/g" package.json`);
