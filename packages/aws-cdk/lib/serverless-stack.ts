@@ -24,7 +24,6 @@ interface Options {
   readonly force?: boolean;
   readonly stackName?: string;
   readonly cdkOutputPath?: string;
-  readonly waitForCFUpdate?: boolean;
 }
 
 /**
@@ -86,13 +85,33 @@ export async function synth(options: Options = { }) {
 }
 
 /**
- * Deploy all stacks in parallel asynchronously, and returns the environment deployed to and progress state.
+ * Deploy all stacks synchronously, used to deploy standard CDK app.
  *
  * @param options CDK options
  *
  * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deploying'  }
  */
 export async function deploy(options: Options = {}) {
+  const { cli, toolkitStackName } = await initCommandLine(options);
+  return await cli.deploy({
+    stackNames: options.stackName ? [options.stackName] : [],
+    exclusively: true,
+    requireApproval: RequireApproval.Never,
+    toolkitStackName,
+    nonCli: true,
+    asyncDeploy: false,
+    skipChangeset: false,
+  });
+}
+
+/**
+ * Deploy all stacks in parallel asynchronously, and returns the environment deployed to and progress state.
+ *
+ * @param options CDK options
+ *
+ * @returns { account, region, status: 'no_resources' | 'unchanged' | 'deploying'  }
+ */
+export async function deployAsync(options: Options = {}) {
   process.env.CFN_QUICK_RETRY = 'true';
 
   const { cli, toolkitStackName } = await initCommandLine(options);
@@ -102,9 +121,10 @@ export async function deploy(options: Options = {}) {
     requireApproval: RequireApproval.Never,
     toolkitStackName,
     force: options.force,
-    cdkOutputPath: options.cdkOutputPath,
-    asyncDeploy: ! options.waitForCFUpdate ? true : false,
+    nonCli: true,
+    asyncDeploy: true,
     skipChangeset: true,
+    cdkOutputPath: options.cdkOutputPath,
   });
 }
 
@@ -123,8 +143,9 @@ export async function destroy(options: Options = { }) {
     stackNames: options.stackName ? [options.stackName] : [],
     exclusively: true,
     force: true,
-    cdkOutputPath: options.cdkOutputPath,
+    nonCli: true,
     asyncDestroy: true,
+    cdkOutputPath: options.cdkOutputPath,
   });
 }
 

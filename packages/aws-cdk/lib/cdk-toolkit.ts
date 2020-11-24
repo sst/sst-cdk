@@ -139,7 +139,7 @@ export class CdkToolkit {
 
     const stackOutputs: { [key: string]: any } = { };
     const outputsFile = options.outputsFile;
-    let asyncResult;
+    let nonCliRet;
 
     for (const stack of stacks.stackArtifacts) {
       if (stacks.stackCount !== 1) { highlight(stack.displayName); }
@@ -161,8 +161,8 @@ export class CdkToolkit {
             fromDeploy: true,
           });
         }
-        if (options.asyncDeploy) {
-          asyncResult = { status: 'no_resources' };
+        if (options.nonCli) {
+          nonCliRet = { status: 'no_resources' };
         }
         continue;
       }
@@ -209,8 +209,8 @@ export class CdkToolkit {
           skipChangeset: options.skipChangeset,
         });
 
-        if (options.asyncDeploy) {
-          asyncResult = {
+        if (options.nonCli) {
+          nonCliRet = {
             account: result.stackEnv?.account,
             region: result.stackEnv?.region,
             status: result.noOp ? 'unchanged' : 'deploying',
@@ -257,8 +257,8 @@ export class CdkToolkit {
       }
     }
 
-    if (options.asyncDeploy) {
-      return asyncResult;
+    if (options.nonCli) {
+      return nonCliRet;
     }
   }
 
@@ -289,7 +289,7 @@ export class CdkToolkit {
     }
 
     const action = options.fromDeploy ? 'deploy' : 'destroy';
-    let asyncResult;
+    let nonCliRet;
 
     for (const stack of stacks.stackArtifacts) {
       success('%s: destroying...', colors.blue(stack.displayName));
@@ -301,8 +301,8 @@ export class CdkToolkit {
           asyncDestroy: options.asyncDestroy,
         });
 
-        if (options.asyncDestroy) {
-          asyncResult = {
+        if (options.nonCli) {
+          nonCliRet = {
             account: result.stackEnv?.account,
             region: result.stackEnv?.region,
             status: result.status,
@@ -317,8 +317,8 @@ export class CdkToolkit {
       }
     }
 
-    if (options.asyncDestroy) {
-      return asyncResult;
+    if (options.nonCli) {
+      return nonCliRet;
     }
   }
 
