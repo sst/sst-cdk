@@ -129,13 +129,33 @@ export async function deployAsync(options: Options = {}) {
 }
 
 /**
- * Destroy a single stack exclusively or destroy all stacks, and returns destroyed stacks.
+ * Destroy a single stack exclusively or destroy all stacks synchronously, used to destroy standard CDK app.
  *
  * @param options CDK options
  *
  * @returns { stacks: [{ id, name }] }
  */
 export async function destroy(options: Options = { }) {
+  process.env.CFN_QUICK_RETRY = 'true';
+
+  const { cli } = await initCommandLine(options);
+  return await cli.destroy({
+    stackNames: options.stackName ? [options.stackName] : [],
+    exclusively: true,
+    force: true,
+    nonCli: true,
+    asyncDestroy: false,
+  });
+}
+
+/**
+ * Destroy a single stack exclusively or destroy all stacks, and returns destroyed stacks.
+ *
+ * @param options CDK options
+ *
+ * @returns { stacks: [{ id, name }] }
+ */
+export async function destroyAsync(options: Options = { }) {
   process.env.CFN_QUICK_RETRY = 'true';
 
   const { cli } = await initCommandLine(options);
