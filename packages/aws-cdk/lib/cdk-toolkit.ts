@@ -308,7 +308,7 @@ export class CdkToolkit {
           success(`\n ✅  %s: ${action}ed\n`, colors.blue(stack.displayName));
         }
 
-        if (options.nonCli) {
+        if (options.nonCli && options.asyncDestroy) {
           nonCliRet = {
             account: result.stackEnv?.account,
             region: result.stackEnv?.region,
@@ -321,7 +321,7 @@ export class CdkToolkit {
       }
     }
 
-    if (options.nonCli) {
+    if (options.nonCli && options.asyncDestroy) {
       return nonCliRet;
     }
   }
