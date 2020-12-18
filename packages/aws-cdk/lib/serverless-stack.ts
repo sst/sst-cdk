@@ -46,13 +46,14 @@ export async function bootstrap(options: Options = { }) {
     roleArn: undefined,
     force: true,
   };
-  return await cli.bootstrap(
+  const ret = await cli.bootstrap(
     environmentSpecs,
     bootstrapper,
     bootstrapOptions,
     nonCli,
     options.cdkOutputPath,
   );
+  return ret;
 }
 
 /**
@@ -64,10 +65,11 @@ export async function bootstrap(options: Options = { }) {
  */
 export async function list(options: Options = { }) {
   const { cli } = await initCommandLine(options);
-  return await cli.list([], {
+  const ret = await cli.list([], {
     nonCli: true,
     cdkOutputPath: options.cdkOutputPath,
   });
+  return ret;
 }
 
 /**
@@ -79,9 +81,10 @@ export async function list(options: Options = { }) {
  */
 export async function synth(options: Options = { }) {
   const { cli } = await initCommandLine(options);
-  return await cli.synth([], false, {
+  const ret = await cli.synth([], false, {
     nonCli: true,
   });
+  return ret;
 }
 
 /**
@@ -93,7 +96,7 @@ export async function synth(options: Options = { }) {
  */
 export async function deploy(options: Options = {}) {
   const { cli, toolkitStackName } = await initCommandLine(options);
-  return await cli.deploy({
+  const ret = await cli.deploy({
     stackNames: options.stackName ? [options.stackName] : [],
     exclusively: true,
     requireApproval: RequireApproval.Never,
@@ -102,6 +105,7 @@ export async function deploy(options: Options = {}) {
     asyncDeploy: false,
     skipChangeset: false,
   });
+  return ret;
 }
 
 /**
@@ -115,7 +119,7 @@ export async function deployAsync(options: Options = {}) {
   process.env.CFN_QUICK_RETRY = 'true';
 
   const { cli, toolkitStackName } = await initCommandLine(options);
-  return await cli.deploy({
+  const ret = await cli.deploy({
     stackNames: options.stackName ? [options.stackName] : [],
     exclusively: true,
     requireApproval: RequireApproval.Never,
@@ -126,6 +130,7 @@ export async function deployAsync(options: Options = {}) {
     skipChangeset: true,
     cdkOutputPath: options.cdkOutputPath,
   });
+  return ret;
 }
 
 /**
@@ -139,13 +144,14 @@ export async function destroy(options: Options = { }) {
   process.env.CFN_QUICK_RETRY = 'true';
 
   const { cli } = await initCommandLine(options);
-  return await cli.destroy({
+  const ret = await cli.destroy({
     stackNames: options.stackName ? [options.stackName] : [],
     exclusively: true,
     force: true,
     nonCli: true,
     asyncDestroy: false,
   });
+  return ret;
 }
 
 /**
@@ -159,7 +165,7 @@ export async function destroyAsync(options: Options = { }) {
   process.env.CFN_QUICK_RETRY = 'true';
 
   const { cli } = await initCommandLine(options);
-  return await cli.destroy({
+  const ret = await cli.destroy({
     stackNames: options.stackName ? [options.stackName] : [],
     exclusively: true,
     force: true,
@@ -167,6 +173,7 @@ export async function destroyAsync(options: Options = { }) {
     asyncDestroy: true,
     cdkOutputPath: options.cdkOutputPath,
   });
+  return ret;
 }
 
 async function initCommandLine(options: Options = { }) {
@@ -183,7 +190,7 @@ async function initCommandLine(options: Options = { }) {
   const argv = {
     app: options.app,
     output: options.output,
-    _: [ 'list' ],
+    _: ['list'],
   };
   const configuration = new Configuration({
     ...argv,
