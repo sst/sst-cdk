@@ -195,8 +195,10 @@ async function initCommandLine(options: Options = { }) {
     _: ['list'],
   };
   const configuration = new Configuration({
-    ...argv,
-    _: argv._ as [Command, ...string[]], // TypeScript at its best
+    commandLineArguments: {
+      ...argv,
+      _: argv._ as [Command, ...string[]], // TypeScript at its best
+    },
   });
   await configuration.load();
 
