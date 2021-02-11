@@ -120,7 +120,7 @@ export class CdkToolkit {
       stacks = await this.selectStacksForDeploy(options.stackNames, options.exclusively);
     }
 
-    const requireApproval = options.requireApproval !== undefined ? options.requireApproval : RequireApproval.Broadening;
+    const requireApproval = options.requireApproval ?? RequireApproval.Broadening;
 
     const parameterMap: { [name: string]: { [name: string]: string | undefined } } = { '*': {} };
     for (const key in options.parameters) {
@@ -377,7 +377,7 @@ export class CdkToolkit {
    * OUTPUT: If more than one stack ends up being selected, an output directory
    * should be supplied, where the templates will be written.
    */
-  public async synth(stackNames: string[], exclusively: boolean, options: { nonCli?: boolean } = { }): Promise<any> {
+  public async synth(stackNames: string[], exclusively: boolean, quiet: boolean, options: { nonCli?: boolean } = { }): Promise<any> {
     const stacks = await this.selectStacksForDiff(stackNames, exclusively);
 
     // if 'nonCli' is set, return
@@ -392,7 +392,10 @@ export class CdkToolkit {
 
     // if we have a single stack, print it to STDOUT
     if (stacks.stackCount === 1) {
-      return stacks.firstStack.template;
+      if (!quiet) {
+        return stacks.firstStack.template;
+      }
+      return undefined;
     }
 
     // This is a slight hack; in integ mode we allow multiple stacks to be synthesized to stdout sequentially.

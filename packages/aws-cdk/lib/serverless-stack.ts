@@ -81,7 +81,9 @@ export async function list(options: Options = { }) {
  */
 export async function synth(options: Options = { }) {
   const { cli } = await initCommandLine(options);
-  const ret = await cli.synth([], false, {
+  const exclusively = false;
+  const quiet = false;
+  const ret = await cli.synth([], exclusively, quiet, {
     nonCli: true,
   });
   return ret;
