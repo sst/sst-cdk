@@ -274,6 +274,7 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
     }).promise();
     debug('Initiated creation of changeset: %s; waiting for it to finish creating...', changeSet.Id);
     changeSetDescription = await waitForChangeSet(cfn, deployName, CDK_CHANGE_SET_NAME);
+  }
 
   // Update termination protection only if it has changed.
   const terminationProtection = stackArtifact.terminationProtection ?? false;
@@ -288,10 +289,10 @@ export async function deployStack(options: DeployStackOptions): Promise<DeploySt
 
   if (!options.skipChangeset && changeSet && changeSetDescription && changeSetHasNoChanges(changeSetDescription)) {
     debug('No changes are to be performed on %s.', deployName);
-  if (options.execute) {
-    debug('Deleting empty change set %s', changeSet.Id);
-    await cfn.deleteChangeSet({ StackName: deployName, ChangeSetName: CDK_CHANGE_SET_NAME }).promise();
-  }
+    if (options.execute) {
+      debug('Deleting empty change set %s', changeSet.Id);
+      await cfn.deleteChangeSet({ StackName: deployName, ChangeSetName: CDK_CHANGE_SET_NAME }).promise();
+    }
     return {
       noOp: true,
       outputs: cloudFormationStack.outputs,
